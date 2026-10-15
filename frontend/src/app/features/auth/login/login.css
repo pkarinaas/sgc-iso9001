@@ -1,0 +1,136 @@
+/* Login page — centers the card and applies form layout */
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+}
+
+/* Card wrapper */
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 1rem;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+/* Card header */
+.login-card__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem 2rem 0;
+  text-align: center;
+}
+
+.login-card__logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.login-card__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--p-primary-color, #3b82f6);
+  letter-spacing: -0.02em;
+}
+
+.login-card__subtitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--p-text-muted-color, #64748b);
+  line-height: 1.4;
+}
+
+/* Form layout (flex column with uniform spacing) */
+.login-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0.5rem 0;
+}
+
+/* Individual field wrapper */
+.login-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* Labels */
+.login-card__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--p-text-color, #e2e8f0);
+}
+
+.login-card__required {
+  color: #f87171;
+  margin-left: 0.125rem;
+}
+
+/* Inputs — make them stretch full width */
+.login-card__input,
+:host ::ng-deep .login-card__field p-password input {
+  width: 100%;
+}
+
+:host ::ng-deep .login-card__field p-password {
+  display: flex;
+  flex-direction: column;
+}
+
+:host ::ng-deep .login-card__field p-password .p-password {
+  width: 100%;
+}
+
+:host ::ng-deep .login-card__field p-password .p-password input {
+  width: 100%;
+}
+
+/* Inline validation hints */
+.login-card__error-hint {
+  font-size: 0.75rem;
+  color: #f87171;
+}
+
+/* Global error message banner */
+.login-card__error {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+/* Submit button — full width */
+.login-card__submit {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+:host ::ng-deep .login-card__submit .p-button {
+  width: 100%;
+  justify-content: center;
+  font-weight: 600;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+:host ::ng-deep .login-card__submit .p-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+:host ::ng-deep .login-card__submit .p-button:active:not(:disabled) {
+  transform: translateY(0);
+}

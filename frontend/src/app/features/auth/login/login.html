@@ -1,0 +1,116 @@
+<main class="login-page" role="main">
+  <p-card class="login-card" [style]="{ 'max-width': '400px', width: '100%' }">
+    <!-- Header -->
+    <ng-template #header>
+      <div class="login-card__header">
+        <img
+          src="/icons/iso_icon.png"
+          alt="Logo SGC-ISO9001"
+          class="login-card__logo"
+          aria-hidden="true"
+        />
+        <h1 class="login-card__title">Iniciar Sesión</h1>
+        <p class="login-card__subtitle">
+          Sistema de Gestión de Calidad <br />
+          Laboratorio de Análisis Clínicos
+        </p>
+      </div>
+    </ng-template>
+
+    <!-- Error Message -->
+    @if (errorMessage()) {
+      <p-message
+        id="login-error-message"
+        severity="error"
+        class="login-card__error"
+        aria-live="assertive"
+        aria-atomic="true"
+        >{{ errorMessage() }}</p-message
+      >
+    }
+
+    <!-- Form -->
+    <form
+      id="login-form"
+      [formGroup]="loginForm"
+      (ngSubmit)="onSubmit()"
+      novalidate
+      class="login-card__form"
+      aria-label="Formulario de inicio de sesión"
+    >
+      <!-- Email field -->
+      <div class="login-card__field">
+        <label for="email" class="login-card__label">
+          Correo Electrónico
+          <span class="login-card__required" aria-hidden="true">*</span>
+        </label>
+        <input
+          id="email"
+          pInputText
+          type="email"
+          formControlName="email"
+          autocomplete="username"
+          [class.ng-invalid]="loginForm.controls.email.invalid && loginForm.controls.email.touched"
+          aria-required="true"
+          aria-describedby="email-error"
+          class="login-card__input"
+        />
+        @if (loginForm.controls.email.invalid && loginForm.controls.email.touched) {
+          <small id="email-error" class="login-card__error-hint" aria-live="polite">
+            @if (loginForm.controls.email.errors?.['required']) {
+              El correo electrónico es obligatorio.
+            } @else if (loginForm.controls.email.errors?.['email']) {
+              Ingrese un correo electrónico válido.
+            }
+          </small>
+        }
+      </div>
+
+      <!-- Password field -->
+      <div class="login-card__field">
+        <label for="password" class="login-card__label">
+          Contraseña
+          <span class="login-card__required" aria-hidden="true">*</span>
+        </label>
+        <input
+          id="password"
+          type="password"
+          pPassword
+          [feedback]="false"
+          formControlName="password"
+          autocomplete="current-password"
+          class="login-card__input"
+          [class.ng-invalid]="
+            loginForm.controls.password.invalid && loginForm.controls.password.touched
+          "
+          aria-required="true"
+          aria-describedby="password-error"
+        />
+        @if (loginForm.controls.password.invalid && loginForm.controls.password.touched) {
+          <small id="password-error" class="login-card__error-hint" aria-live="polite">
+            @if (loginForm.controls.password.errors?.['required']) {
+              La contraseña es obligatoria.
+            } @else if (loginForm.controls.password.errors?.['minlength']) {
+              La contraseña debe tener al menos 6 caracteres.
+            }
+          </small>
+        }
+      </div>
+
+      <!-- Submit button -->
+      <button
+        pButton
+        id="login-submit-btn"
+        type="submit"
+        [disabled]="isLoading()"
+        class="login-card__submit"
+        aria-label="Iniciar sesión en el sistema"
+      >
+        @if (isLoading()) {
+          <i class="pi pi-spinner pi-spin" aria-hidden="true"></i>
+        }
+        <span class="p-button-label">Iniciar Sesión</span>
+      </button>
+    </form>
+  </p-card>
+</main>
