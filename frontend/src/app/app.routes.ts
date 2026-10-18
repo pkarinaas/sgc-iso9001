@@ -9,15 +9,18 @@ export const routes: Routes = [
   },
   {
     path: 'login',
-    loadComponent: () =>
-      import('./features/auth/login/login').then((m) => m.LoginComponent),
+    loadComponent: () => import('./features/auth/login/login').then((m) => m.LoginComponent),
   },
   {
     path: 'dashboard',
+    redirectTo: 'admin/users',
+    pathMatch: 'full',
+  },
+  {
+    path: 'admin/users',
     canActivate: [authGuard],
-    // Placeholder — replace with the real Dashboard lazy-loaded component.
     loadComponent: () =>
-      import('./features/auth/login/login').then((m) => m.LoginComponent),
+      import('./features/users/user-list/user-list').then((m) => m.UserListComponent),
   },
   {
     path: '**',

@@ -1,5 +1,22 @@
-/* Global base styles for SGC-ISO9001 */
 @import 'primeicons/primeicons.css';
+
+:root {
+  /* Backgrounds */
+  --sgc-bg-app: #fcf8f9;
+  --sgc-surface: #ffffff;
+
+  /* Brand colours */
+  --sgc-primary: #be123c;
+  --sgc-primary-hover: #9f1239;
+  --sgc-accent-soft: #ffe4e6;
+
+  /* Borders & dividers */
+  --sgc-border: #f1e4e8;
+
+  /* Typography */
+  --sgc-text-primary: #1e293b;
+  --sgc-text-secondary: #64748b;
+}
 
 *,
 *::before,
@@ -12,6 +29,8 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  background-color: var(--sgc-bg-app);
+  color: var(--sgc-text-primary);
   font-family:
     'Inter',
     system-ui,
@@ -23,6 +42,4 @@ body {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0f172a;
-  color: #e2e8f0;
 }
