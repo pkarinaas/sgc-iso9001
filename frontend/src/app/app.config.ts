@@ -9,15 +9,35 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { PrimeNG, PRIME_NG_CONFIG } from 'primeng/config';
 import Aura from '@primeng/themes/aura';
+import { definePreset } from '@primeuix/themes';
 import { provideServiceWorker } from '@angular/service-worker';
 import { routes } from './app.routes';
+
+const SgcPreset = definePreset(Aura, {
+  semantic: {
+    primary: {
+      50: '{rose.50}',
+      100: '{rose.100}',
+      200: '{rose.200}',
+      300: '{rose.300}',
+      400: '{rose.400}',
+      500: '{rose.600}',
+      600: '{rose.700}',
+      700: '{rose.800}',
+      800: '{rose.900}',
+      900: '{rose.950}',
+      950: '{rose.950}',
+    },
+  },
+});
 
 /** PrimeNG theme and options configuration. */
 const primeNGConfig = {
   theme: {
-    preset: Aura,
+    preset: SgcPreset,
     options: {
-      darkModeSelector: '.dark-mode',
+      // Force light mode globally — this intranet has no dark-mode toggle.
+      darkModeSelector: false as const,
       cssLayer: {
         name: 'primeng',
         order: 'primeng, app-styles',
