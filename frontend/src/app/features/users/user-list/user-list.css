@@ -255,3 +255,47 @@
     width: 100%;
   }
 }
+
+/* Create / Edit Employee Dialog – form styles */
+
+/* Stacked field wrapper */
+.user-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* Field label */
+.user-form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+/* Required asterisk */
+.required-mark {
+  color: #9f1239;
+  margin-left: 2px;
+}
+
+/* Validation error text */
+.user-form-error {
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+/* Full-width inputs / selects inside the dialog */
+.user-form-field input.w-full,
+.user-form-field .w-full {
+  width: 100%;
+}
+
+/* Action buttons row (Cancel + Save) */
+.user-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1e4e8;
+  margin-top: 0.25rem;
+}

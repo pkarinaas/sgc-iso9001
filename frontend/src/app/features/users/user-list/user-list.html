@@ -1,3 +1,5 @@
+<p-toast />
+
 <section class="user-list-page">
   <!-- Page header -->
   <header class="user-list-header">
@@ -13,7 +15,7 @@
       type="button"
       pButton
       class="btn-new-employee"
-      (click)="onCreateUser()"
+      (click)="openCreateDialog()"
     >
       <i class="pi pi-user-plus" pButtonIcon></i>
       <span pButtonLabel>Nuevo Empleado</span>
@@ -147,7 +149,7 @@
               [rounded]="true"
               severity="info"
               title="Editar usuario"
-              (click)="onEditUser(user)"
+              (click)="openEditDialog(user)"
             >
               <i class="pi pi-pencil"></i>
             </button>
@@ -196,3 +198,144 @@
     </p-table>
   </div>
 </section>
+
+<!-- Create / Edit Employee Dialog -->
+<p-dialog
+  [(visible)]="isDialogVisible"
+  [modal]="true"
+  [style]="{ width: '450px' }"
+  [header]="isEditMode() ? 'Editar Empleado' : 'Nuevo Empleado'"
+  [closable]="true"
+  (onHide)="closeDialog()"
+>
+  <form
+    [formGroup]="userForm"
+    (ngSubmit)="saveUser()"
+    style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem"
+  >
+    <!-- Full name -->
+    <div class="user-form-field">
+      <label for="input-full-name" class="user-form-label">
+        Nombre Completo <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-full-name"
+        type="text"
+        pInputText
+        formControlName="full_name"
+        placeholder="Ej. María García López"
+        class="w-full"
+        [class.ng-invalid]="
+          userForm.controls.full_name.invalid && userForm.controls.full_name.touched
+        "
+      />
+      @if (userForm.controls.full_name.invalid && userForm.controls.full_name.touched) {
+        <small class="user-form-error">
+          @if (userForm.controls.full_name.errors?.['required']) {
+            El nombre es obligatorio.
+          } @else if (userForm.controls.full_name.errors?.['minlength']) {
+            Debe tener al menos 3 caracteres.
+          }
+        </small>
+      }
+    </div>
+
+    <!-- Email -->
+    <div class="user-form-field">
+      <label for="input-email" class="user-form-label">
+        Correo Electrónico <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-email"
+        type="email"
+        pInputText
+        formControlName="email"
+        placeholder="empleado@empresa.com"
+        class="w-full"
+        [class.ng-invalid]="userForm.controls.email.invalid && userForm.controls.email.touched"
+      />
+      @if (isEditMode()) {
+        <small style="color: var(--p-text-muted-color, #6b7280)">
+          El correo no se puede modificar.
+        </small>
+      }
+      @if (userForm.controls.email.invalid && userForm.controls.email.touched) {
+        <small class="user-form-error">
+          @if (userForm.controls.email.errors?.['required']) {
+            El correo es obligatorio.
+          } @else if (userForm.controls.email.errors?.['email']) {
+            Ingrese un correo electrónico válido.
+          }
+        </small>
+      }
+    </div>
+
+    <!-- Password (create only) -->
+    @if (!isEditMode()) {
+      <div class="user-form-field">
+        <label for="input-password" class="user-form-label">
+          Contraseña <span class="required-mark">*</span>
+        </label>
+        <input
+          id="input-password"
+          type="password"
+          pInputPassword
+          formControlName="password"
+          placeholder="Mínimo 8 caracteres"
+          class="w-full"
+          [class.ng-invalid]="
+            userForm.controls.password.invalid && userForm.controls.password.touched
+          "
+        />
+        @if (userForm.controls.password.invalid && userForm.controls.password.touched) {
+          <small class="user-form-error">
+            @if (userForm.controls.password.errors?.['required']) {
+              La contraseña es obligatoria.
+            } @else if (userForm.controls.password.errors?.['minlength']) {
+              Debe tener al menos 8 caracteres.
+            }
+          </small>
+        }
+      </div>
+    }
+
+    <!-- Role -->
+    <div class="user-form-field">
+      <label for="select-role" class="user-form-label">
+        Rol <span class="required-mark">*</span>
+      </label>
+      <p-select
+        formControlName="role_id"
+        [options]="formRoleOptions"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Seleccionar rol"
+        class="w-full"
+        [class.ng-invalid]="userForm.controls.role_id.invalid && userForm.controls.role_id.touched"
+      ></p-select>
+
+      @if (userForm.controls.role_id.invalid && userForm.controls.role_id.touched) {
+        <small class="user-form-error">Seleccione un rol.</small>
+      }
+    </div>
+
+    <!-- Submit button -->
+    <div class="user-form-actions">
+      <button
+        id="btn-dialog-cancel"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        (click)="closeDialog()"
+        [disabled]="isSaving()"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button id="btn-dialog-save" type="submit" pButton severity="primary" [loading]="isSaving()">
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </form>
+</p-dialog>

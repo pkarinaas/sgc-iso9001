@@ -26,3 +26,22 @@ export interface User {
   /** Nested role object returned by the Supabase join. */
   roles?: Role | null;
 }
+
+/**
+ * Payload for creating a new user.
+ * `password` is required on creation but omitted on update flows.
+ */
+export interface CreateUserPayload {
+  email: string;
+  password?: string;
+  full_name: string;
+  role_id: number;
+}
+
+/**
+ * Payload for updating an existing user.
+ */
+export interface UpdateUserPayload {
+  full_name: string;
+  role_id: number;
+}

@@ -1,6 +1,8 @@
 import { Injectable, signal } from '@angular/core';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase/supabase.client';
-import type { Role, User } from '../models/user.model';
+import { environment } from '../../../environments/environment';
+import type { Role, User, CreateUserPayload, UpdateUserPayload } from '../models/user.model';
 
 /**
  * UserService manages the reactive state for the Users & Roles feature.
@@ -71,13 +73,88 @@ export class UserService {
   }
 
   /**
-   * Opens the edit dialog for a given user.
+   * Creates a new user in Supabase Auth and inserts a matching row in
+   * `public.users`.
    *
-   * @param user - The user record to edit.
+   * A **temporary** Supabase client (no session persistence) is used for the
+   * `auth.signUp()` call so that the admin's active session is never replaced
+   * by the newly created user's session.  The main `supabase` client (which
+   * holds the admin JWT) is used for the `public.users` insert so that RLS
+   * policies are satisfied.
+   *
+   * @param payload - The data required to register a new employee.
+   * @returns An object whose `error` property is null on success.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  editUser(_user: User): void {
-    // TODO: Emit the selected user to the edit dialog.
+  async createUser(payload: CreateUserPayload): Promise<{ error: string | null }> {
+    // Temporary client – isolated session so the admin stays logged in.
+    const tempClient = createClient(environment.supabase.url, environment.supabase.anonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+
+    // Step 1: Register the new user in Supabase Auth.
+    const { data: authData, error: authError } = await tempClient.auth.signUp({
+      email: payload.email,
+      password: payload.password!,
+      options: {
+        data: { full_name: payload.full_name },
+      },
+    });
+
+    if (authError) {
+      return { error: authError.message };
+    }
+
+    const newUserId = authData.user?.id;
+    if (!newUserId) {
+      return { error: 'No se pudo obtener el ID del nuevo usuario.' };
+    }
+
+    // Step 2: Insert the public profile using the admin client (RLS requires
+    // the admin JWT that lives in the main `supabase` singleton).
+    const { error: insertError } = await supabase.from('users').insert({
+      id: newUserId,
+      email: payload.email,
+      full_name: payload.full_name,
+      role_id: payload.role_id,
+      is_active: true,
+    });
+
+    if (insertError) {
+      return { error: insertError.message };
+    }
+
+    // Refresh the in-memory user list.
+    await this.loadUsers();
+    return { error: null };
+  }
+
+  /**
+   * Updates mutable fields (`full_name`, `role_id`) for an existing user.
+   *
+   * @param userId  - UUID of the user record to update.
+   * @param payload - The new values for `full_name` and `role_id`.
+   * @returns An object whose `error` property is null on success.
+   */
+  async updateUser(userId: string, payload: UpdateUserPayload): Promise<{ error: string | null }> {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        full_name: payload.full_name,
+        role_id: payload.role_id,
+      })
+      .eq('id', userId);
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    // Refresh the in-memory user list.
+    await this.loadUsers();
+    return { error: null };
   }
 
   /**

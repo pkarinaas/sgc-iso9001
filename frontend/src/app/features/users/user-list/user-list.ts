@@ -1,13 +1,17 @@
-import { Component, inject, OnInit, ViewChild } from '@angular/core';
+import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { Select } from 'primeng/select';
-import { ButtonDirective, Button } from 'primeng/button';
+import { ButtonDirective } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { DialogModule } from 'primeng/dialog';
+import { ToastModule } from 'primeng/toast';
+import { PasswordModule } from 'primeng/password';
+import { MessageService } from 'primeng/api';
 import { UserService } from '../../../core/services/user.service';
 import type { Role, User } from '../../../core/models/user.model';
 
@@ -33,9 +37,11 @@ interface FilterOption<T> {
   selector: 'app-user-list',
   templateUrl: './user-list.html',
   styleUrl: './user-list.css',
+  providers: [MessageService],
   imports: [
     DatePipe,
     FormsModule,
+    ReactiveFormsModule,
     TableModule,
     TagModule,
     Select,
@@ -43,13 +49,46 @@ interface FilterOption<T> {
     InputTextModule,
     IconFieldModule,
     InputIconModule,
+    DialogModule,
+    ToastModule,
+    PasswordModule,
   ],
 })
 export class UserListComponent implements OnInit {
   readonly userService = inject(UserService);
+  private readonly fb = inject(FormBuilder);
+  private readonly messageService = inject(MessageService);
 
   /** Reference to the p-table instance for programmatic filter resets. */
   @ViewChild('usersTable') usersTable!: Table;
+
+  // Dialog state signals
+
+  /** Controls the visibility of the create/edit dialog. */
+  isDialogVisible = signal(false);
+
+  /** True when the dialog is in edit mode; false for create mode. */
+  isEditMode = signal(false);
+
+  /** UUID of the user being edited, or null in create mode. */
+  selectedUserId = signal<string | null>(null);
+
+  /** True while the save operation is in-flight (disables the save button). */
+  isSaving = signal(false);
+
+  // Reactive form
+
+  /**
+   * Shared form for both create and edit flows.
+   * Validators for `email` and `password` are toggled programmatically
+   * depending on the active mode.
+   */
+  readonly userForm = this.fb.nonNullable.group({
+    full_name: ['', [Validators.required, Validators.minLength(3)]],
+    email: ['', [Validators.required, Validators.email]],
+    password: [''],
+    role_id: [null as number | null, Validators.required],
+  });
 
   // Filter state
 
@@ -72,6 +111,14 @@ export class UserListComponent implements OnInit {
     }));
   }
 
+  /** Role options for the create/edit form, mapped to Spanish. */
+  get formRoleOptions() {
+    return this.userService.roles().map((r: Role) => ({
+      label: this.getRoleLabel(r.name),
+      value: r.id,
+    }));
+  }
+
   /** Static status options (values map to the is_active boolean column). */
   readonly statusOptions: FilterOption<boolean>[] = [
     { label: 'Activo', value: true },
@@ -84,6 +131,112 @@ export class UserListComponent implements OnInit {
     // Load roles first (used by the filter dropdown) then users.
     await this.userService.loadRoles();
     await this.userService.loadUsers();
+  }
+
+  // Dialog actions
+
+  /**
+   * Opens the dialog in **create** mode.
+   * Resets the form, sets password as required, and clears edit state.
+   */
+  openCreateDialog(): void {
+    this.userForm.reset();
+    this.userForm.controls.email.enable();
+
+    // Password is required only when creating a new account.
+    this.userForm.controls.password.setValidators([Validators.required, Validators.minLength(8)]);
+    this.userForm.controls.password.updateValueAndValidity();
+
+    this.isEditMode.set(false);
+    this.selectedUserId.set(null);
+    this.isDialogVisible.set(true);
+  }
+
+  /**
+   * Opens the dialog in **edit** mode pre-populated with the given user's data.
+   * Email is disabled.
+   * Password field is hidden and its validators are cleared.
+   *
+   * @param user - The user record to edit.
+   */
+  openEditDialog(user: User): void {
+    this.userForm.reset();
+
+    this.userForm.patchValue({
+      full_name: user.full_name,
+      email: user.email,
+      role_id: user.role_id,
+    });
+
+    // Lock the email – it must not be changed after account creation.
+    this.userForm.controls.email.disable();
+
+    // Clear password validators; the field is hidden in edit mode.
+    this.userForm.controls.password.clearValidators();
+    this.userForm.controls.password.updateValueAndValidity();
+
+    this.isEditMode.set(true);
+    this.selectedUserId.set(user.id);
+    this.isDialogVisible.set(true);
+  }
+
+  /** Closes the dialog and resets transient state. */
+  closeDialog(): void {
+    this.isDialogVisible.set(false);
+    this.isEditMode.set(false);
+    this.selectedUserId.set(null);
+    this.userForm.reset();
+  }
+
+  /**
+   * Validates the form and delegates to the appropriate service method.
+   * Displays a `p-toast` notification on success or failure.
+   */
+  async saveUser(): Promise<void> {
+    if (this.userForm.invalid) {
+      this.userForm.markAllAsTouched();
+      return;
+    }
+
+    this.isSaving.set(true);
+
+    const { full_name, email, password, role_id } = this.userForm.getRawValue();
+    let result: { error: string | null };
+
+    if (this.isEditMode()) {
+      result = await this.userService.updateUser(this.selectedUserId()!, {
+        full_name,
+        role_id: role_id!,
+      });
+    } else {
+      result = await this.userService.createUser({
+        email,
+        password,
+        full_name,
+        role_id: role_id!,
+      });
+    }
+
+    this.isSaving.set(false);
+
+    if (result.error) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: result.error,
+        life: 6000,
+      });
+    } else {
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Éxito',
+        detail: this.isEditMode()
+          ? 'Empleado actualizado correctamente.'
+          : 'Empleado creado correctamente.',
+        life: 4000,
+      });
+      this.closeDialog();
+    }
   }
 
   // Filter helpers
@@ -142,24 +295,6 @@ export class UserListComponent implements OnInit {
       VIEWER: 'Lector',
     };
     return labels[roleName ?? ''] ?? roleName ?? '—';
-  }
-
-  // Action stubs
-
-  /**
-   * Opens the create-user dialog.
-   */
-  onCreateUser(): void {
-    // TODO: open create-user dialog.
-  }
-
-  /**
-   * Triggers the edit flow for the selected user.
-   *
-   * @param user - The user row to edit.
-   */
-  onEditUser(user: User): void {
-    this.userService.editUser(user);
   }
 
   /**
