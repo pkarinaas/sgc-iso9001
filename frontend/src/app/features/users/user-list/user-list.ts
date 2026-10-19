@@ -11,7 +11,8 @@ import { InputIconModule } from 'primeng/inputicon';
 import { DialogModule } from 'primeng/dialog';
 import { ToastModule } from 'primeng/toast';
 import { PasswordModule } from 'primeng/password';
-import { MessageService } from 'primeng/api';
+import { ConfirmDialog } from 'primeng/confirmdialog';
+import { MessageService, ConfirmationService } from 'primeng/api';
 import { UserService } from '../../../core/services/user.service';
 import type { Role, User } from '../../../core/models/user.model';
 
@@ -37,7 +38,7 @@ interface FilterOption<T> {
   selector: 'app-user-list',
   templateUrl: './user-list.html',
   styleUrl: './user-list.css',
-  providers: [MessageService],
+  providers: [MessageService, ConfirmationService],
   imports: [
     DatePipe,
     FormsModule,
@@ -52,12 +53,14 @@ interface FilterOption<T> {
     DialogModule,
     ToastModule,
     PasswordModule,
+    ConfirmDialog,
   ],
 })
 export class UserListComponent implements OnInit {
   readonly userService = inject(UserService);
   private readonly fb = inject(FormBuilder);
   private readonly messageService = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
 
   /** Reference to the p-table instance for programmatic filter resets. */
   @ViewChild('usersTable') usersTable!: Table;
@@ -298,11 +301,41 @@ export class UserListComponent implements OnInit {
   }
 
   /**
-   * Toggles the active/inactive status of a user.
+   * Prompts the administrator for confirmation before toggling a user's active status.
    *
    * @param user - The user row whose status should be toggled.
    */
   onToggleStatus(user: User): void {
-    this.userService.toggleUserStatus(user);
+    const isActive = user.is_active;
+
+    this.confirmationService.confirm({
+      header: isActive ? 'Confirmar Desactivación' : 'Confirmar Activación',
+      message: isActive
+        ? `¿Está seguro de que desea desactivar la cuenta de ${user.full_name}? El empleado no podrá acceder al sistema.`
+        : `¿Está seguro de que desea reactivar la cuenta de ${user.full_name}?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sí, continuar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: isActive ? 'p-button-danger' : 'p-button-success',
+      accept: async () => {
+        const result = await this.userService.toggleUserStatus(user.id, user.is_active);
+
+        if (result.error) {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: result.error,
+            life: 6000,
+          });
+        } else {
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Éxito',
+            detail: 'Estado actualizado',
+            life: 4000,
+          });
+        }
+      },
+    });
   }
 }

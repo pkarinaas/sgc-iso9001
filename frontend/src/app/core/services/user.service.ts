@@ -160,11 +160,25 @@ export class UserService {
   /**
    * Toggles the `is_active` flag for a given user.
    *
-   * @param user - The user record whose status should be toggled.
+   * @param userId - UUID of the user record whose status is to be toggled.
+   * @param currentStatus - Current active status of the user.
+   * @returns An object whose `error` property is null on success, or an error message string.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  toggleUserStatus(_user: User): void {
-    // TODO: Call supabase.from('users').update({ is_active: !user.is_active })
-    //                   .eq('id', user.id) and reload the user list.
+  async toggleUserStatus(
+    userId: string,
+    currentStatus: boolean,
+  ): Promise<{ error: string | null }> {
+    const { error } = await supabase
+      .from('users')
+      .update({ is_active: !currentStatus })
+      .eq('id', userId);
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    // Refresh the in-memory user list.
+    await this.loadUsers();
+    return { error: null };
   }
 }
