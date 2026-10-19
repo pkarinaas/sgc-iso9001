@@ -156,6 +156,13 @@ export class UserListComponent implements OnInit {
   }
 
   /**
+   * Alias for openCreateDialog to trigger creation modal from buttons or tests.
+   */
+  onCreateUser(): void {
+    this.openCreateDialog();
+  }
+
+  /**
    * Opens the dialog in **edit** mode pre-populated with the given user's data.
    * Email is disabled.
    * Password field is hidden and its validators are cleared.
