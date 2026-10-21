@@ -1,0 +1,143 @@
+<section class="doc-list-page">
+  <!-- Page header -->
+  <header class="doc-list-header">
+    <div class="doc-list-header__titles">
+      <h1 class="doc-list-header__title">Repositorio Documental</h1>
+      <p class="doc-list-header__subtitle">
+        Listado Maestro de Documentos del Sistema de Gestión de Calidad
+      </p>
+    </div>
+
+    <button id="btn-upload-document" type="button" pButton class="btn-upload-document">
+      <i class="pi pi-upload" pButtonIcon></i>
+      <span pButtonLabel>Subir Documento</span>
+    </button>
+  </header>
+
+  <!-- Error banner -->
+  @if (documentService.error()) {
+    <div class="doc-list-error" role="alert">
+      <i class="pi pi-exclamation-triangle"></i>
+      {{ documentService.error() }}
+    </div>
+  }
+
+  <!-- Data table -->
+  <div class="doc-list-table-card">
+    <p-table
+      #documentsTable
+      [value]="documentService.documents()"
+      [loading]="documentService.loading()"
+      [paginator]="true"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 25, 50]"
+      [globalFilterFields]="['title', 'code']"
+      [sortMode]="'multiple'"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} documentos"
+      styleClass="p-datatable-striped p-datatable-gridlines"
+    >
+      <!-- Caption: global search -->
+      <ng-template #caption>
+        <div class="doc-list-filters">
+          <!-- Global text search -->
+          <p-iconfield class="doc-list-filters__search">
+            <p-inputicon styleClass="pi pi-search" />
+            <input
+              id="input-doc-global-search"
+              pInputText
+              pSize="small"
+              type="text"
+              [value]="globalFilterValue()"
+              (input)="onGlobalFilter($event)"
+              placeholder="Buscar por título o código..."
+            />
+          </p-iconfield>
+        </div>
+      </ng-template>
+
+      <!-- Column headers -->
+      <ng-template #header>
+        <tr>
+          <th pSortableColumn="code">Código <p-sort-icon field="code" /></th>
+          <th pSortableColumn="title">Título <p-sort-icon field="title" /></th>
+          <th pSortableColumn="version">Versión <p-sort-icon field="version" /></th>
+          <th>Estado</th>
+          <th pSortableColumn="updated_at">
+            Fecha de Modificación <p-sort-icon field="updated_at" />
+          </th>
+          <th class="col-actions">Acciones</th>
+        </tr>
+      </ng-template>
+
+      <!-- Row body -->
+      <ng-template #body let-doc>
+        <tr>
+          <!-- Code -->
+          <td>
+            <span class="doc-code">{{ doc.code }}</span>
+          </td>
+
+          <!-- Title -->
+          <td class="doc-title-cell">{{ doc.title }}</td>
+
+          <!-- Version -->
+          <td>
+            <span class="doc-version">{{ formatVersion(doc.version) }}</span>
+          </td>
+
+          <!-- Status badge -->
+          <td>
+            <span class="sgc-badge" [attr.data-status]="doc.status">
+              <span class="sgc-status__dot"></span>
+              {{ getStatusLabel(doc.status) }}
+            </span>
+          </td>
+
+          <!-- Updated at -->
+          <td>{{ doc.updated_at | date: 'dd/MM/yyyy' }}</td>
+
+          <!-- Action buttons -->
+          <td class="col-actions">
+            <!-- Download -->
+            <button
+              [id]="'btn-download-' + doc.id"
+              type="button"
+              pButton
+              [text]="true"
+              [rounded]="true"
+              severity="secondary"
+              title="Descargar documento"
+              [disabled]="!doc.file_url"
+            >
+              <i class="pi pi-download"></i>
+            </button>
+
+            <!-- View -->
+            <button
+              [id]="'btn-view-' + doc.id"
+              type="button"
+              pButton
+              [text]="true"
+              [rounded]="true"
+              severity="info"
+              title="Ver documento"
+            >
+              <i class="pi pi-eye"></i>
+            </button>
+          </td>
+        </tr>
+      </ng-template>
+
+      <!-- ── Empty message ── -->
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="6" class="doc-list-empty">
+            <i class="pi pi-folder-open doc-list-empty__icon"></i>
+            <p>No se encontraron documentos con los filtros seleccionados.</p>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+</section>
