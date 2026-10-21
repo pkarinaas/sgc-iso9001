@@ -107,11 +107,14 @@ export class UserListComponent implements OnInit {
   // Dropdown option lists
 
   /** Role options derived from UserService signals after loadRoles(). */
-  get roleOptions(): FilterOption<string>[] {
-    return this.userService.roles().map((r: Role) => ({
-      label: this.getRoleLabel(r.name),
-      value: r.name,
-    }));
+  get roleOptions(): FilterOption<string | null>[] {
+    return [
+      { label: 'Todos los roles', value: null },
+      ...this.userService.roles().map((r: Role) => ({
+        label: this.getRoleLabel(r.name),
+        value: r.name,
+      })),
+    ];
   }
 
   /** Role options for the create/edit form, mapped to Spanish. */
@@ -123,7 +126,8 @@ export class UserListComponent implements OnInit {
   }
 
   /** Static status options (values map to the is_active boolean column). */
-  readonly statusOptions: FilterOption<boolean>[] = [
+  readonly statusOptions: FilterOption<boolean | null>[] = [
+    { label: 'Todos los estados', value: null },
     { label: 'Activo', value: true },
     { label: 'Inactivo', value: false },
   ];
