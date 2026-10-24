@@ -8,7 +8,13 @@
       </p>
     </div>
 
-    <button id="btn-upload-document" type="button" pButton class="btn-upload-document">
+    <button
+      id="btn-upload-document"
+      type="button"
+      pButton
+      class="btn-upload-document"
+      (click)="openUploadDialog()"
+    >
       <i class="pi pi-upload" pButtonIcon></i>
       <span pButtonLabel>Subir Documento</span>
     </button>
@@ -183,3 +189,119 @@
     </p-table>
   </div>
 </section>
+
+<!-- Upload Document Dialog Modal -->
+<p-dialog
+  [(visible)]="isDialogVisible"
+  [modal]="true"
+  [style]="{ width: '450px' }"
+  header="Subir Nuevo Documento"
+  [closable]="true"
+  (onHide)="closeUploadDialog()"
+>
+  <form [formGroup]="documentForm" (ngSubmit)="saveDocument()" class="doc-dialog-form">
+    <!-- Title input -->
+    <div class="doc-form-field">
+      <label for="input-doc-title" class="doc-form-label">
+        Título <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-doc-title"
+        type="text"
+        pInputText
+        formControlName="title"
+        placeholder="Ej. Manual de Calidad"
+        class="doc-form-input"
+        [class.ng-invalid]="
+          documentForm.controls.title.invalid && documentForm.controls.title.touched
+        "
+      />
+      @if (documentForm.controls.title.invalid && documentForm.controls.title.touched) {
+        <small class="doc-form-error">El título es obligatorio.</small>
+      }
+    </div>
+
+    <!-- Code input -->
+    <div class="doc-form-field">
+      <label for="input-doc-code" class="doc-form-label"> Código </label>
+      <input
+        id="input-doc-code"
+        type="text"
+        pInputText
+        formControlName="code"
+        placeholder="Ej. SGC-MAN-001"
+        class="doc-form-input"
+      />
+    </div>
+
+    <!-- Numeric input for Version -->
+    <div class="doc-form-field">
+      <label for="input-doc-version" class="doc-form-label">
+        Versión <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-doc-version"
+        type="text"
+        pInputText
+        formControlName="version"
+        placeholder="00"
+        class="doc-form-input"
+        inputmode="numeric"
+        maxlength="10"
+        [class.ng-invalid]="
+          documentForm.controls.version.invalid && documentForm.controls.version.touched
+        "
+      />
+      @if (documentForm.controls.version.invalid && documentForm.controls.version.touched) {
+        <small class="doc-form-error">
+          @if (documentForm.controls.version.errors?.['required']) {
+            La versión es obligatoria.
+          } @else if (documentForm.controls.version.errors?.['pattern']) {
+            La versión debe ser numérica (ej. 00, 01).
+          }
+        </small>
+      }
+    </div>
+
+    <!-- Upload component -->
+    <div class="doc-form-field">
+      <label class="doc-form-label"> Archivo PDF <span class="required-mark">*</span> </label>
+      <p-fileupload
+        #fileUpload
+        mode="basic"
+        chooseLabel="Seleccionar PDF"
+        accept="application/pdf"
+        [maxFileSize]="5242880"
+        (onSelect)="onFileSelect($event)"
+      ></p-fileupload>
+      @if (documentForm.controls.file.invalid && documentForm.controls.file.touched) {
+        <small class="doc-form-error">El archivo PDF es obligatorio.</small>
+      }
+    </div>
+
+    <!-- Dialog footer with Cancel and Save buttons -->
+    <div class="doc-form-actions">
+      <button
+        id="btn-dialog-cancel"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        (click)="closeUploadDialog()"
+        [disabled]="isSubmitting"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button
+        id="btn-dialog-save"
+        type="submit"
+        pButton
+        severity="primary"
+        [loading]="isSubmitting"
+        [disabled]="documentForm.invalid || isSubmitting"
+      >
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </form>
+</p-dialog>

@@ -58,6 +58,10 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => {
       const primeNG = inject(PrimeNG);
       primeNG.setConfig(primeNGConfig);
+      primeNG.setTranslation({
+        noFileChosenMessage: 'Ningún archivo seleccionado',
+        fileChosenMessage: '{0} archivos seleccionados',
+      });
     }),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),

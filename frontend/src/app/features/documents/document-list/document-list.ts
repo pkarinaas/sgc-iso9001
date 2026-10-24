@@ -1,6 +1,6 @@
 import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { FilterService } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
@@ -10,6 +10,9 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { DatePicker } from 'primeng/datepicker';
 import { Select } from 'primeng/select';
+import { DialogModule } from 'primeng/dialog';
+import { FileUpload, FileUploadModule } from 'primeng/fileupload';
+import { PrimeNG } from 'primeng/config';
 import { DocumentService } from '../../../core/services/document.service';
 import type { DocumentStatus } from '../../../core/models/document.model';
 
@@ -34,6 +37,7 @@ interface DateRangeFilter {
   imports: [
     DatePipe,
     FormsModule,
+    ReactiveFormsModule,
     TableModule,
     TagModule,
     ButtonDirective,
@@ -42,14 +46,38 @@ interface DateRangeFilter {
     InputIconModule,
     DatePicker,
     Select,
+    DialogModule,
+    FileUploadModule,
   ],
 })
 export class DocumentListComponent implements OnInit {
   readonly documentService = inject(DocumentService);
   private readonly filterService = inject(FilterService);
+  private readonly fb = inject(FormBuilder);
+  private readonly primeNG = inject(PrimeNG);
 
   /** Reference to the p-table instance for programmatic filter resets. */
   @ViewChild('dt') documentsTable!: Table;
+
+  /** Reference to the file upload component to reset its file state. */
+  @ViewChild('fileUpload') fileUpload?: FileUpload;
+
+  // Dialog state
+
+  /** Controls the visibility of the upload document dialog modal. */
+  isDialogVisible = false;
+
+  /** True while the upload/save operation is in-flight. */
+  isSubmitting = false;
+
+  // Reactive form for uploading new document
+
+  readonly documentForm = this.fb.group({
+    title: ['', [Validators.required]],
+    code: [''],
+    version: ['00', [Validators.required, Validators.pattern(/^[0-9]+$/)]],
+    file: [null as File | null, [Validators.required]],
+  });
 
   /** Current value of the global text search input. */
   globalFilterValue = signal('');
@@ -95,6 +123,10 @@ export class DocumentListComponent implements OnInit {
         return true;
       },
     );
+    this.primeNG.setTranslation({
+      noFileChosenMessage: 'Ningún archivo seleccionado',
+      fileChosenMessage: '{0} archivos seleccionados',
+    });
     await this.documentService.loadDocuments();
   }
 
@@ -135,13 +167,68 @@ export class DocumentListComponent implements OnInit {
   }
 
   /**
-   * Formats a version number as a version string prefixed with 'v'.
-   * For example, `1` becomes `'v1.0'`.
+   * Formats a version number or string prefixed with 'v'.
+   * For example, `'00'` becomes `'v00'`, `1` becomes `'v01'`.
    *
-   * @param version - The numeric version from the database.
-   * @returns A formatted version string, e.g. 'v1.0'.
+   * @param version - The version string or number.
+   * @returns A formatted version string, e.g. 'v00', 'v01'.
    */
-  formatVersion(version: number): string {
-    return `v${version.toFixed(1)}`;
+  formatVersion(version: number | string): string {
+    if (typeof version === 'string') {
+      return version.startsWith('v') ? version : `v${version}`;
+    }
+    return typeof version === 'number' && !Number.isInteger(version)
+      ? `v${version.toFixed(1)}`
+      : `v${String(version).padStart(2, '0')}`;
+  }
+
+  // Dialog & File upload methods
+
+  /**
+   * Opens the upload document modal dialog after resetting the form.
+   */
+  openUploadDialog(): void {
+    this.documentForm.reset({
+      title: '',
+      code: '',
+      version: '00',
+      file: null,
+    });
+    this.fileUpload?.clear();
+    this.isDialogVisible = true;
+  }
+
+  /**
+   * Closes the upload document modal dialog.
+   */
+  closeUploadDialog(): void {
+    this.isDialogVisible = false;
+  }
+
+  /**
+   * Captures the selected file from the PrimeNG FileUpload component
+   * and assigns it to the `file` form control.
+   *
+   * @param event - The selection event emitted by p-fileupload.
+   */
+  onFileSelect(event: any): void {
+    const file =
+      event?.files?.[0] ?? event?.currentFiles?.[0] ?? (event instanceof File ? event : null);
+
+    if (file) {
+      this.documentForm.patchValue({ file });
+      this.documentForm.get('file')?.markAsDirty();
+      this.documentForm.get('file')?.updateValueAndValidity();
+    }
+  }
+
+  /**
+   * Handles document form submission.
+   */
+  saveDocument(): void {
+    if (this.documentForm.invalid || this.isSubmitting) {
+      this.documentForm.markAllAsTouched();
+      return;
+    }
   }
 }
