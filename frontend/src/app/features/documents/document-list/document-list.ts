@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { FilterService } from 'primeng/api';
+import { MessageService, FilterService } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonDirective } from 'primeng/button';
@@ -13,6 +13,7 @@ import { Select } from 'primeng/select';
 import { DialogModule } from 'primeng/dialog';
 import { FileUpload, FileUploadModule } from 'primeng/fileupload';
 import { PrimeNG } from 'primeng/config';
+import { ToastModule } from 'primeng/toast';
 import { DocumentService } from '../../../core/services/document.service';
 import type { DocumentStatus } from '../../../core/models/document.model';
 
@@ -48,11 +49,14 @@ interface DateRangeFilter {
     Select,
     DialogModule,
     FileUploadModule,
+    ToastModule,
   ],
+  providers: [MessageService],
 })
 export class DocumentListComponent implements OnInit {
   readonly documentService = inject(DocumentService);
   private readonly filterService = inject(FilterService);
+  private readonly messageService = inject(MessageService);
   private readonly fb = inject(FormBuilder);
   private readonly primeNG = inject(PrimeNG);
 
@@ -223,12 +227,64 @@ export class DocumentListComponent implements OnInit {
   }
 
   /**
-   * Handles document form submission.
+   * Handles document form submission: uploads the PDF to Storage and saves
+   * the metadata to the database via `DocumentService.createDocument()`.
+   *
+   * On success, shows a toast notification, closes the modal, resets the form,
+   * and refreshes the documents table.
+   * On failure, shows an error toast with the underlying message.
    */
-  saveDocument(): void {
+  async saveDocument(): Promise<void> {
     if (this.documentForm.invalid || this.isSubmitting) {
       this.documentForm.markAllAsTouched();
       return;
     }
+
+    const { file, title, code, version } = this.documentForm.value;
+
+    this.isSubmitting = true;
+    try {
+      await this.documentService.createDocument(file!, {
+        title: title!,
+        code: code ?? '',
+        version: version! as any,
+      });
+
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Documento guardado',
+        detail: 'El documento se subió correctamente.',
+        life: 4000,
+      });
+
+      this.isDialogVisible = false;
+      this.documentForm.reset({ title: '', code: '', version: '00', file: null });
+      this.fileUpload?.clear();
+      await this.documentService.loadDocuments();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al guardar el documento.';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error al guardar',
+        detail: this.formatErrorMessage(message),
+        life: 6000,
+      });
+    } finally {
+      this.isSubmitting = false;
+    }
+  }
+
+  /**
+   * Formats error messages ensuring any technical English string is shown in Spanish.
+   */
+  private formatErrorMessage(message: string): string {
+    const lower = message.toLowerCase();
+    if (lower.includes('row-level security') || lower.includes('violates row-level security policy')) {
+      return 'No tienes permisos suficientes para realizar esta acción (política de seguridad).';
+    }
+    if (lower.includes('failed to fetch') || lower.includes('network')) {
+      return 'Error de conexión con el servidor. Verifica tu conexión a internet.';
+    }
+    return message;
   }
 }
