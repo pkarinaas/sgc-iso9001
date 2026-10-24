@@ -273,10 +273,18 @@
         chooseLabel="Seleccionar PDF"
         accept="application/pdf"
         [maxFileSize]="5242880"
+        invalidFileSizeMessageSummary="{0}: Tamaño de archivo no permitido."
+        invalidFileSizeMessageDetail="El tamaño máximo permitido es 5MB."
         (onSelect)="onFileSelect($event)"
       ></p-fileupload>
       @if (documentForm.controls.file.invalid && documentForm.controls.file.touched) {
-        <small class="doc-form-error">El archivo PDF es obligatorio.</small>
+        <small class="doc-form-error">
+          @if (documentForm.controls.file.errors?.['required']) {
+            El archivo PDF es obligatorio.
+          } @else if (documentForm.controls.file.errors?.['maxSize']) {
+            El archivo supera el límite de 5MB permitido.
+          }
+        </small>
       }
     </div>
 

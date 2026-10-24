@@ -1,6 +1,6 @@
 import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { MessageService, FilterService } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
@@ -74,14 +74,33 @@ export class DocumentListComponent implements OnInit {
   /** True while the upload/save operation is in-flight. */
   isSubmitting = false;
 
+  // Form constants
+
+  /** Maximum allowed PDF file size in bytes (5 MB). */
+  static readonly MAX_FILE_SIZE_BYTES = 5_242_880;
+
   // Reactive form for uploading new document
 
   readonly documentForm = this.fb.group({
     title: ['', [Validators.required]],
     code: [''],
     version: ['00', [Validators.required, Validators.pattern(/^[0-9]+$/)]],
-    file: [null as File | null, [Validators.required]],
+    file: [null as File | null, [Validators.required, DocumentListComponent.fileSizeValidator]],
   });
+
+  /**
+   * Synchronous validator that rejects files exceeding `MAX_FILE_SIZE_BYTES`.
+   *
+   * @param control - The reactive form control holding the `File` object.
+   * @returns `{ maxSize: { actual: number; max: number } }` when the file is too large, or `null`.
+   */
+  static fileSizeValidator(control: AbstractControl): ValidationErrors | null {
+    const file = control.value as File | null;
+    if (!file || !(file instanceof File)) return null;
+    return file.size > DocumentListComponent.MAX_FILE_SIZE_BYTES
+      ? { maxSize: { actual: file.size, max: DocumentListComponent.MAX_FILE_SIZE_BYTES } }
+      : null;
+  }
 
   /** Current value of the global text search input. */
   globalFilterValue = signal('');
@@ -130,6 +149,7 @@ export class DocumentListComponent implements OnInit {
     this.primeNG.setTranslation({
       noFileChosenMessage: 'Ningún archivo seleccionado',
       fileChosenMessage: '{0} archivos seleccionados',
+      fileSizeTypes: ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
     });
     await this.documentService.loadDocuments();
   }
