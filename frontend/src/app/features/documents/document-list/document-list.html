@@ -25,7 +25,7 @@
   <!-- Data table -->
   <div class="doc-list-table-card">
     <p-table
-      #documentsTable
+      #dt
       [value]="documentService.documents()"
       [loading]="documentService.loading()"
       [paginator]="true"
@@ -39,20 +39,62 @@
     >
       <!-- Caption: global search -->
       <ng-template #caption>
-        <div class="doc-list-filters">
+        <div class="doc-list-filters flex flex-wrap items-center gap-4">
           <!-- Global text search -->
-          <p-iconfield class="doc-list-filters__search">
+          <p-iconfield class="doc-list-filters__search flex-1 min-w-[240px]">
             <p-inputicon styleClass="pi pi-search" />
             <input
               id="input-doc-global-search"
               pInputText
-              pSize="small"
               type="text"
               [value]="globalFilterValue()"
               (input)="onGlobalFilter($event)"
               placeholder="Buscar por título o código..."
+              class="w-full h-[42px]"
+              [style.height.px]="42"
             />
           </p-iconfield>
+
+          <!-- Status filter -->
+          <p-select
+            [options]="statusOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Filtrar por estado"
+            (onChange)="onStatusChange($event, dt)"
+            class="w-full md:w-52 h-[42px]"
+            [style.height.px]="42"
+            appendTo="body"
+          ></p-select>
+
+          <!-- Date range filter -->
+          <p-datepicker
+            [(ngModel)]="startDate"
+            dateFormat="dd/mm/yy"
+            [showClear]="true"
+            placeholder="Desde"
+            (onSelect)="onDateFilterChange(dt)"
+            (onClear)="onDateFilterChange(dt)"
+            class="w-full md:w-48 h-[42px]"
+            inputStyleClass="h-[42px]"
+            [inputStyle]="datePickerInputStyle"
+            [style.height.px]="42"
+            appendTo="body"
+          ></p-datepicker>
+          <p-datepicker
+            [(ngModel)]="endDate"
+            dateFormat="dd/mm/yy"
+            [showClear]="true"
+            placeholder="Hasta"
+            [minDate]="startDate"
+            (onSelect)="onDateFilterChange(dt)"
+            (onClear)="onDateFilterChange(dt)"
+            class="w-full md:w-48 h-[42px]"
+            inputStyleClass="h-[42px]"
+            [inputStyle]="datePickerInputStyle"
+            [style.height.px]="42"
+            appendTo="body"
+          ></p-datepicker>
         </div>
       </ng-template>
 
