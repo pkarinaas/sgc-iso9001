@@ -1,0 +1,343 @@
+<p-toast />
+
+<section class="user-list-page">
+  <!-- Page header -->
+  <header class="user-list-header">
+    <div class="user-list-header__titles">
+      <h1 class="user-list-header__title">Gestión de Empleados y Roles</h1>
+      <p class="user-list-header__subtitle">
+        Administración de cuentas y permisos del Sistema de Gestión de Calidad
+      </p>
+    </div>
+
+    <button
+      id="btn-new-user"
+      type="button"
+      pButton
+      class="btn-new-employee"
+      (click)="openCreateDialog()"
+    >
+      <i class="pi pi-user-plus" pButtonIcon></i>
+      <span pButtonLabel>Nuevo Empleado</span>
+    </button>
+  </header>
+
+  <!-- Error banner -->
+  @if (userService.error()) {
+    <div class="user-list-error" role="alert">
+      <i class="pi pi-exclamation-triangle"></i>
+      {{ userService.error() }}
+    </div>
+  }
+
+  <!-- Data table -->
+  <div class="user-list-table-card">
+    <p-table
+      #usersTable
+      [value]="userService.users()"
+      [loading]="userService.loading()"
+      [paginator]="true"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 25, 50]"
+      [globalFilterFields]="['full_name', 'email']"
+      [sortMode]="'multiple'"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} empleados"
+      styleClass="p-datatable-striped p-datatable-gridlines"
+    >
+      <!-- ── Caption: global search + dropdowns ── -->
+      <ng-template #caption>
+        <div class="user-list-filters">
+          <!-- Global text search -->
+          <p-iconfield class="user-list-filters__search">
+            <p-inputicon styleClass="pi pi-search" />
+            <input
+              id="input-global-search"
+              pInputText
+              pSize="small"
+              type="text"
+              [value]="globalFilterValue"
+              (input)="onGlobalFilter($event)"
+              placeholder="Buscar por nombre o correo..."
+            />
+          </p-iconfield>
+
+          <!-- Role filter -->
+          <p-select
+            id="select-role-filter"
+            size="small"
+            [options]="roleOptions"
+            [(ngModel)]="selectedRole"
+            (onChange)="onRoleFilterChange($event.value)"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Filtrar por rol"
+            [showClear]="true"
+            class="user-list-filters__select"
+          />
+
+          <!-- Status filter -->
+          <p-select
+            id="select-status-filter"
+            size="small"
+            [options]="statusOptions"
+            [(ngModel)]="selectedStatus"
+            (onChange)="onStatusFilterChange($event.value)"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Filtrar por estado"
+            [showClear]="true"
+            class="user-list-filters__select"
+          />
+        </div>
+      </ng-template>
+
+      <!-- ── Column headers ── -->
+      <ng-template #header>
+        <tr>
+          <th pSortableColumn="full_name">Nombre Completo <p-sort-icon field="full_name" /></th>
+          <th pSortableColumn="email">Correo Electrónico <p-sort-icon field="email" /></th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th pSortableColumn="created_at">Fecha de Alta <p-sort-icon field="created_at" /></th>
+          <th class="col-actions">Acciones</th>
+        </tr>
+      </ng-template>
+
+      <!-- ── Row body ── -->
+      <ng-template #body let-user>
+        <tr>
+          <!-- Full name -->
+          <td>{{ user.full_name }}</td>
+
+          <!-- Email -->
+          <td>{{ user.email }}</td>
+
+          <!-- Role tag -->
+          <td>
+            <span class="sgc-badge" [attr.data-role]="user.roles?.name">
+              {{ getRoleLabel(user.roles?.name) }}
+            </span>
+          </td>
+
+          <!-- Status tag -->
+          <td>
+            @if (user.is_active) {
+              <span class="sgc-status sgc-status--active">
+                <span class="sgc-status__dot"></span>
+                Activo
+              </span>
+            } @else {
+              <span class="sgc-status sgc-status--inactive">
+                <span class="sgc-status__dot"></span>
+                Inactivo
+              </span>
+            }
+          </td>
+
+          <!-- Created at -->
+          <td>{{ user.created_at | date: 'dd/MM/yyyy' }}</td>
+
+          <!-- Action buttons -->
+          <td class="col-actions">
+            <!-- Edit -->
+            <button
+              [id]="'btn-edit-' + user.id"
+              type="button"
+              pButton
+              [text]="true"
+              [rounded]="true"
+              severity="info"
+              title="Editar usuario"
+              (click)="openEditDialog(user)"
+            >
+              <i class="pi pi-pencil"></i>
+            </button>
+
+            <!-- Toggle active/inactive -->
+            @if (user.is_active) {
+              <button
+                [id]="'btn-deactivate-' + user.id"
+                type="button"
+                pButton
+                [text]="true"
+                [rounded]="true"
+                severity="danger"
+                title="Desactivar usuario"
+                (click)="onToggleStatus(user)"
+              >
+                <i class="pi pi-ban"></i>
+              </button>
+            } @else {
+              <button
+                [id]="'btn-activate-' + user.id"
+                type="button"
+                pButton
+                [text]="true"
+                [rounded]="true"
+                severity="success"
+                title="Activar usuario"
+                (click)="onToggleStatus(user)"
+              >
+                <i class="pi pi-check-circle"></i>
+              </button>
+            }
+          </td>
+        </tr>
+      </ng-template>
+
+      <!-- ── Empty message ── -->
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="6" class="user-list-empty">
+            <i class="pi pi-inbox user-list-empty__icon"></i>
+            <p>No se encontraron empleados registrados con los filtros seleccionados.</p>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+
+  <p-confirmdialog [style]="{ width: '450px' }" />
+</section>
+
+<!-- Create / Edit Employee Dialog -->
+<p-dialog
+  [(visible)]="isDialogVisible"
+  [modal]="true"
+  [style]="{ width: '450px' }"
+  [header]="isEditMode() ? 'Editar Empleado' : 'Nuevo Empleado'"
+  [closable]="true"
+  (onHide)="closeDialog()"
+>
+  <form
+    [formGroup]="userForm"
+    (ngSubmit)="saveUser()"
+    style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem"
+  >
+    <!-- Full name -->
+    <div class="user-form-field">
+      <label for="input-full-name" class="user-form-label">
+        Nombre Completo <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-full-name"
+        type="text"
+        pInputText
+        formControlName="full_name"
+        placeholder="Ej. María García López"
+        class="w-full"
+        [class.ng-invalid]="
+          userForm.controls.full_name.invalid && userForm.controls.full_name.touched
+        "
+      />
+      @if (userForm.controls.full_name.invalid && userForm.controls.full_name.touched) {
+        <small class="user-form-error">
+          @if (userForm.controls.full_name.errors?.['required']) {
+            El nombre es obligatorio.
+          } @else if (userForm.controls.full_name.errors?.['minlength']) {
+            Debe tener al menos 3 caracteres.
+          }
+        </small>
+      }
+    </div>
+
+    <!-- Email -->
+    <div class="user-form-field">
+      <label for="input-email" class="user-form-label">
+        Correo Electrónico <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-email"
+        type="email"
+        pInputText
+        formControlName="email"
+        placeholder="empleado@empresa.com"
+        class="w-full"
+        [class.ng-invalid]="userForm.controls.email.invalid && userForm.controls.email.touched"
+      />
+      @if (isEditMode()) {
+        <small style="color: var(--p-text-muted-color, #6b7280)">
+          El correo no se puede modificar.
+        </small>
+      }
+      @if (userForm.controls.email.invalid && userForm.controls.email.touched) {
+        <small class="user-form-error">
+          @if (userForm.controls.email.errors?.['required']) {
+            El correo es obligatorio.
+          } @else if (userForm.controls.email.errors?.['email']) {
+            Ingrese un correo electrónico válido.
+          }
+        </small>
+      }
+    </div>
+
+    <!-- Password (create only) -->
+    @if (!isEditMode()) {
+      <div class="user-form-field">
+        <label for="input-password" class="user-form-label">
+          Contraseña <span class="required-mark">*</span>
+        </label>
+        <input
+          id="input-password"
+          type="password"
+          pInputPassword
+          formControlName="password"
+          placeholder="Mínimo 8 caracteres"
+          class="w-full"
+          [class.ng-invalid]="
+            userForm.controls.password.invalid && userForm.controls.password.touched
+          "
+        />
+        @if (userForm.controls.password.invalid && userForm.controls.password.touched) {
+          <small class="user-form-error">
+            @if (userForm.controls.password.errors?.['required']) {
+              La contraseña es obligatoria.
+            } @else if (userForm.controls.password.errors?.['minlength']) {
+              Debe tener al menos 8 caracteres.
+            }
+          </small>
+        }
+      </div>
+    }
+
+    <!-- Role -->
+    <div class="user-form-field">
+      <label for="select-role" class="user-form-label">
+        Rol <span class="required-mark">*</span>
+      </label>
+      <p-select
+        formControlName="role_id"
+        [options]="formRoleOptions"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Seleccionar rol"
+        class="w-full"
+        [class.ng-invalid]="userForm.controls.role_id.invalid && userForm.controls.role_id.touched"
+      ></p-select>
+
+      @if (userForm.controls.role_id.invalid && userForm.controls.role_id.touched) {
+        <small class="user-form-error">Seleccione un rol.</small>
+      }
+    </div>
+
+    <!-- Submit button -->
+    <div class="user-form-actions">
+      <button
+        id="btn-dialog-cancel"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        (click)="closeDialog()"
+        [disabled]="isSaving()"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button id="btn-dialog-save" type="submit" pButton severity="primary" [loading]="isSaving()">
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </form>
+</p-dialog>
