@@ -1,0 +1,316 @@
+<p-toast />
+<section class="doc-list-page">
+  <!-- Page header -->
+  <header class="doc-list-header">
+    <div class="doc-list-header__titles">
+      <h1 class="doc-list-header__title">Repositorio Documental</h1>
+      <p class="doc-list-header__subtitle">
+        Listado Maestro de Documentos del Sistema de Gestión de Calidad
+      </p>
+    </div>
+
+    <button
+      id="btn-upload-document"
+      type="button"
+      pButton
+      class="btn-upload-document"
+      (click)="openUploadDialog()"
+    >
+      <i class="pi pi-upload" pButtonIcon></i>
+      <span pButtonLabel>Subir Documento</span>
+    </button>
+  </header>
+
+  <!-- Error banner -->
+  @if (documentService.error()) {
+    <div class="doc-list-error" role="alert">
+      <i class="pi pi-exclamation-triangle"></i>
+      {{ documentService.error() }}
+    </div>
+  }
+
+  <!-- Data table -->
+  <div class="doc-list-table-card">
+    <p-table
+      #dt
+      [value]="documentService.documents()"
+      [loading]="documentService.loading()"
+      [paginator]="true"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 25, 50]"
+      [globalFilterFields]="['title', 'code']"
+      [sortMode]="'multiple'"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} documentos"
+      styleClass="p-datatable-striped p-datatable-gridlines"
+    >
+      <!-- Caption: global search -->
+      <ng-template #caption>
+        <div class="doc-list-filters flex flex-wrap items-center gap-4">
+          <!-- Global text search -->
+          <p-iconfield class="doc-list-filters__search flex-1 min-w-[240px]">
+            <p-inputicon styleClass="pi pi-search" />
+            <input
+              id="input-doc-global-search"
+              pInputText
+              type="text"
+              [value]="globalFilterValue()"
+              (input)="onGlobalFilter($event)"
+              placeholder="Buscar por título o código..."
+              class="w-full h-[42px]"
+              [style.height.px]="42"
+            />
+          </p-iconfield>
+
+          <!-- Status filter -->
+          <p-select
+            [options]="statusOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Filtrar por estado"
+            (onChange)="onStatusChange($event, dt)"
+            class="w-full md:w-52 h-[42px]"
+            [style.height.px]="42"
+            appendTo="body"
+          ></p-select>
+
+          <!-- Date range filter -->
+          <p-datepicker
+            [(ngModel)]="startDate"
+            dateFormat="dd/mm/yy"
+            [showClear]="true"
+            placeholder="Desde"
+            (onSelect)="onDateFilterChange(dt)"
+            (onClear)="onDateFilterChange(dt)"
+            class="w-full md:w-48 h-[42px]"
+            inputStyleClass="h-[42px]"
+            [inputStyle]="datePickerInputStyle"
+            [style.height.px]="42"
+            appendTo="body"
+          ></p-datepicker>
+          <p-datepicker
+            [(ngModel)]="endDate"
+            dateFormat="dd/mm/yy"
+            [showClear]="true"
+            placeholder="Hasta"
+            [minDate]="startDate"
+            (onSelect)="onDateFilterChange(dt)"
+            (onClear)="onDateFilterChange(dt)"
+            class="w-full md:w-48 h-[42px]"
+            inputStyleClass="h-[42px]"
+            [inputStyle]="datePickerInputStyle"
+            [style.height.px]="42"
+            appendTo="body"
+          ></p-datepicker>
+        </div>
+      </ng-template>
+
+      <!-- Column headers -->
+      <ng-template #header>
+        <tr>
+          <th pSortableColumn="code">Código <p-sort-icon field="code" /></th>
+          <th pSortableColumn="title">Título <p-sort-icon field="title" /></th>
+          <th pSortableColumn="version">Versión <p-sort-icon field="version" /></th>
+          <th>Estado</th>
+          <th pSortableColumn="updated_at">
+            Fecha de Modificación <p-sort-icon field="updated_at" />
+          </th>
+          <th class="col-actions">Acciones</th>
+        </tr>
+      </ng-template>
+
+      <!-- Row body -->
+      <ng-template #body let-doc>
+        <tr>
+          <!-- Code -->
+          <td>
+            <span class="doc-code">{{ doc.code }}</span>
+          </td>
+
+          <!-- Title -->
+          <td class="doc-title-cell">{{ doc.title }}</td>
+
+          <!-- Version -->
+          <td>
+            <span class="doc-version">{{ formatVersion(doc.version) }}</span>
+          </td>
+
+          <!-- Status badge -->
+          <td>
+            <span class="sgc-badge" [attr.data-status]="doc.status">
+              <span class="sgc-status__dot"></span>
+              {{ getStatusLabel(doc.status) }}
+            </span>
+          </td>
+
+          <!-- Updated at -->
+          <td>{{ doc.updated_at | date: 'dd/MM/yyyy' }}</td>
+
+          <!-- Action buttons -->
+          <td class="col-actions">
+            <!-- Download -->
+            <button
+              [id]="'btn-download-' + doc.id"
+              type="button"
+              pButton
+              [text]="true"
+              [rounded]="true"
+              severity="secondary"
+              title="Descargar documento"
+              [disabled]="!doc.file_url"
+            >
+              <i class="pi pi-download"></i>
+            </button>
+
+            <!-- View -->
+            <button
+              [id]="'btn-view-' + doc.id"
+              type="button"
+              pButton
+              [text]="true"
+              [rounded]="true"
+              severity="info"
+              title="Ver documento"
+            >
+              <i class="pi pi-eye"></i>
+            </button>
+          </td>
+        </tr>
+      </ng-template>
+
+      <!-- ── Empty message ── -->
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="6" class="doc-list-empty">
+            <i class="pi pi-folder-open doc-list-empty__icon"></i>
+            <p>No se encontraron documentos con los filtros seleccionados.</p>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+</section>
+
+<!-- Upload Document Dialog Modal -->
+<p-dialog
+  [(visible)]="isDialogVisible"
+  [modal]="true"
+  [style]="{ width: '450px' }"
+  header="Subir Nuevo Documento"
+  [closable]="true"
+  (onHide)="closeUploadDialog()"
+>
+  <form [formGroup]="documentForm" (ngSubmit)="saveDocument()" class="doc-dialog-form">
+    <!-- Title input -->
+    <div class="doc-form-field">
+      <label for="input-doc-title" class="doc-form-label">
+        Título <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-doc-title"
+        type="text"
+        pInputText
+        formControlName="title"
+        placeholder="Ej. Manual de Calidad"
+        class="doc-form-input"
+        [class.ng-invalid]="
+          documentForm.controls.title.invalid && documentForm.controls.title.touched
+        "
+      />
+      @if (documentForm.controls.title.invalid && documentForm.controls.title.touched) {
+        <small class="doc-form-error">El título es obligatorio.</small>
+      }
+    </div>
+
+    <!-- Code input -->
+    <div class="doc-form-field">
+      <label for="input-doc-code" class="doc-form-label"> Código </label>
+      <input
+        id="input-doc-code"
+        type="text"
+        pInputText
+        formControlName="code"
+        placeholder="Ej. SGC-MAN-001"
+        class="doc-form-input"
+      />
+    </div>
+
+    <!-- Numeric input for Version -->
+    <div class="doc-form-field">
+      <label for="input-doc-version" class="doc-form-label">
+        Versión <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-doc-version"
+        type="text"
+        pInputText
+        formControlName="version"
+        placeholder="00"
+        class="doc-form-input"
+        inputmode="numeric"
+        maxlength="10"
+        [class.ng-invalid]="
+          documentForm.controls.version.invalid && documentForm.controls.version.touched
+        "
+      />
+      @if (documentForm.controls.version.invalid && documentForm.controls.version.touched) {
+        <small class="doc-form-error">
+          @if (documentForm.controls.version.errors?.['required']) {
+            La versión es obligatoria.
+          } @else if (documentForm.controls.version.errors?.['pattern']) {
+            La versión debe ser numérica (ej. 00, 01).
+          }
+        </small>
+      }
+    </div>
+
+    <!-- Upload component -->
+    <div class="doc-form-field">
+      <label class="doc-form-label"> Archivo PDF <span class="required-mark">*</span> </label>
+      <p-fileupload
+        #fileUpload
+        mode="basic"
+        chooseLabel="Seleccionar PDF"
+        accept="application/pdf"
+        [maxFileSize]="5242880"
+        invalidFileSizeMessageSummary="{0}: Tamaño de archivo no permitido."
+        invalidFileSizeMessageDetail="El tamaño máximo permitido es 5MB."
+        (onSelect)="onFileSelect($event)"
+      ></p-fileupload>
+      @if (documentForm.controls.file.invalid && documentForm.controls.file.touched) {
+        <small class="doc-form-error">
+          @if (documentForm.controls.file.errors?.['required']) {
+            El archivo PDF es obligatorio.
+          } @else if (documentForm.controls.file.errors?.['maxSize']) {
+            El archivo supera el límite de 5MB permitido.
+          }
+        </small>
+      }
+    </div>
+
+    <!-- Dialog footer with Cancel and Save buttons -->
+    <div class="doc-form-actions">
+      <button
+        id="btn-dialog-cancel"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        (click)="closeUploadDialog()"
+        [disabled]="isSubmitting"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button
+        id="btn-dialog-save"
+        type="submit"
+        pButton
+        severity="primary"
+        [loading]="isSubmitting"
+        [disabled]="documentForm.invalid || isSubmitting"
+      >
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </form>
+</p-dialog>

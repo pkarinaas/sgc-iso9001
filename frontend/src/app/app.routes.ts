@@ -14,7 +14,7 @@ export const routes: Routes = [
   },
   {
     path: 'dashboard',
-    redirectTo: 'login',
+    redirectTo: 'documents',
     pathMatch: 'full',
   },
   {
@@ -22,6 +22,14 @@ export const routes: Routes = [
     canActivate: [authGuard, roleGuard],
     loadComponent: () =>
       import('./features/users/user-list/user-list').then((m) => m.UserListComponent),
+  },
+  {
+    path: 'documents',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/documents/document-list/document-list').then(
+        (m) => m.DocumentListComponent,
+      ),
   },
   {
     path: '**',

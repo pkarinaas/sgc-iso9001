@@ -58,6 +58,12 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => {
       const primeNG = inject(PrimeNG);
       primeNG.setConfig(primeNGConfig);
+      primeNG.setTranslation({
+        noFileChosenMessage: 'Ningún archivo seleccionado',
+        fileChosenMessage: '{0} archivos seleccionados',
+        // File size units used by p-fileupload when rendering size limits
+        fileSizeTypes: ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
+      });
     }),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
