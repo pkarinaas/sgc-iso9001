@@ -47,6 +47,14 @@
 /* "Nuevo Empleado" button */
 .btn-new-employee {
   white-space: nowrap;
+  background-color: #881337 !important;
+  border-color: #881337 !important;
+  color: #ffffff !important;
+}
+
+.btn-new-employee:hover {
+  background-color: #9f1239 !important;
+  border-color: #9f1239 !important;
 }
 
 /* Error banner */
@@ -298,4 +306,27 @@
   padding-top: 0.5rem;
   border-top: 1px solid #f1e4e8;
   margin-top: 0.25rem;
+}
+
+/* Guardar button */
+:host ::ng-deep #btn-dialog-save.p-button,
+#btn-dialog-save {
+  background-color: #881337 !important;
+  border-color: #881337 !important;
+  color: #ffffff !important;
+}
+
+:host ::ng-deep #btn-dialog-save.p-button:hover:not(:disabled),
+#btn-dialog-save:hover:not(:disabled) {
+  background-color: #9f1239 !important;
+  border-color: #9f1239 !important;
+}
+
+:host ::ng-deep #btn-dialog-save.p-button:disabled,
+#btn-dialog-save:disabled {
+  background-color: #881337 !important;
+  border-color: #881337 !important;
+  color: #ffffff !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
 }

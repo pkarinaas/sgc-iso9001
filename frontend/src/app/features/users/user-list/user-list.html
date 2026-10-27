@@ -335,7 +335,14 @@
       >
         <span pButtonLabel>Cancelar</span>
       </button>
-      <button id="btn-dialog-save" type="submit" pButton severity="primary" [loading]="isSaving()">
+      <button
+        id="btn-dialog-save"
+        type="submit"
+        pButton
+        severity="primary"
+        [loading]="isSaving()"
+        [disabled]="userForm.invalid || isSaving()"
+      >
         <span pButtonLabel>Guardar</span>
       </button>
     </div>

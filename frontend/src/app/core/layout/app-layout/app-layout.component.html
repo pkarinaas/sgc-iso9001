@@ -1,0 +1,81 @@
+<div class="flex h-screen bg-gray-50 w-full overflow-hidden">
+  <!-- Sidebar (Left Panel) -->
+  <aside
+    class="w-64 bg-white border-r border-gray-200 flex flex-col sidebar shrink-0"
+    [class.sidebar--hidden]="!isSidebarVisible()"
+  >
+    <!-- Sidebar Header with Brand and Toggle Button -->
+    <div class="p-6 flex items-center justify-between">
+      <span class="text-2xl font-bold text-[#800020] tracking-tight">SGC-ISO9001</span>
+      <button
+        id="btn-toggle-sidebar"
+        type="button"
+        (click)="toggleSidebar()"
+        class="btn-hamburger"
+        title="Ocultar barra lateral"
+        aria-label="Ocultar barra lateral"
+      >
+        <i class="pi pi-bars text-xl"></i>
+      </button>
+    </div>
+
+    <!-- Navigation Links -->
+    <nav class="flex-1 px-4 flex flex-col gap-2 overflow-y-auto">
+      <a
+        routerLink="/users"
+        routerLinkActive="!bg-rose-50 !text-[#800020]"
+        class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer font-medium"
+      >
+        <i class="pi pi-users text-lg"></i>
+        <span>Usuarios</span>
+      </a>
+
+      <a
+        routerLink="/documents"
+        routerLinkActive="!bg-rose-50 !text-[#800020]"
+        class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer font-medium"
+      >
+        <i class="pi pi-folder text-lg"></i>
+        <span>Repositorio</span>
+      </a>
+    </nav>
+
+    <!-- Sidebar Footer -->
+    <div class="p-4 border-t border-gray-200">
+      <button
+        id="btn-logout"
+        type="button"
+        (click)="onLogout()"
+        class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[#800020] hover:bg-rose-50 transition-colors cursor-pointer font-medium text-left"
+      >
+        <i class="pi pi-sign-out text-lg"></i>
+        <span>Cerrar Sesión</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content Wrapper (Right Panel) -->
+  <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+    <!-- Top bar visible when sidebar is hidden to restore it cleanly -->
+    @if (!isSidebarVisible()) {
+      <header class="topbar-collapsed">
+        <button
+          id="btn-open-sidebar"
+          type="button"
+          (click)="toggleSidebar()"
+          class="btn-hamburger"
+          title="Mostrar barra lateral"
+          aria-label="Mostrar barra lateral"
+        >
+          <i class="pi pi-bars text-xl"></i>
+        </button>
+        <span class="text-xl font-bold text-[#800020] tracking-tight">SGC-ISO9001</span>
+      </header>
+    }
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>

@@ -86,17 +86,67 @@
 .doc-list-filters {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 1rem;
   padding: 0.75rem 1.25rem;
+  width: 100%;
 }
 
 .doc-list-filters__search {
-  flex: 1;
-  min-width: 240px;
+  flex: 2;
+  min-width: 220px;
 }
 
 .doc-list-filters__search input {
+  width: 100%;
+  font-size: 0.8125rem;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  border-radius: 8px;
+}
+
+.doc-list-filters__select {
+  flex: 1;
+  min-width: 160px;
+  font-size: 0.8125rem;
+  border-radius: 8px;
+}
+
+:host ::ng-deep .doc-list-filters__select .p-select-label {
+  font-size: 0.8125rem !important;
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+
+:host ::ng-deep .p-select-overlay .p-select-option,
+:host ::ng-deep .p-select-list .p-select-option {
+  font-size: 0.8125rem !important;
+  padding: 0.4rem 0.75rem !important;
+}
+
+:host ::ng-deep .p-select-overlay .p-select-option.p-select-option-selected,
+:host ::ng-deep .p-select-overlay .p-select-option[aria-selected='true'],
+:host ::ng-deep .p-select-list .p-select-option.p-select-option-selected,
+:host ::ng-deep .p-select-list .p-select-option[aria-selected='true'] {
+  background-color: #fff1f2 !important;
+  color: #881337 !important;
+  font-weight: 500 !important;
+}
+
+:host ::ng-deep .p-select-overlay .p-select-option:not(.p-select-option-selected):hover,
+:host ::ng-deep .p-select-list .p-select-option:not(.p-select-option-selected):hover {
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
+}
+
+.doc-list-filters__date {
+  flex: 1;
+  min-width: 125px;
+  font-size: 0.8125rem;
+  border-radius: 8px;
+}
+
+:host ::ng-deep .doc-list-filters__date .p-inputtext,
+:host ::ng-deep .doc-list-filters__date input {
   width: 100%;
   font-size: 0.8125rem;
   padding-top: 0.4rem;
@@ -260,7 +310,9 @@
     align-items: stretch;
   }
 
-  .doc-list-filters__search {
+  .doc-list-filters__search,
+  .doc-list-filters__select,
+  .doc-list-filters__date {
     min-width: unset;
     width: 100%;
   }
@@ -440,4 +492,27 @@
   padding-top: 0.5rem;
   border-top: 1px solid #f1e4e8;
   margin-top: 0.25rem;
+}
+
+/* Guardar button */
+:host ::ng-deep #btn-dialog-save.p-button,
+#btn-dialog-save {
+  background-color: #881337 !important;
+  border-color: #881337 !important;
+  color: #ffffff !important;
+}
+
+:host ::ng-deep #btn-dialog-save.p-button:hover:not(:disabled),
+#btn-dialog-save:hover:not(:disabled) {
+  background-color: #9f1239 !important;
+  border-color: #9f1239 !important;
+}
+
+:host ::ng-deep #btn-dialog-save.p-button:disabled,
+#btn-dialog-save:disabled {
+  background-color: #881337 !important;
+  border-color: #881337 !important;
+  color: #ffffff !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
 }

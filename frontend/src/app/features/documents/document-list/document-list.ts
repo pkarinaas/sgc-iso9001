@@ -105,6 +105,9 @@ export class DocumentListComponent implements OnInit {
   /** Current value of the global text search input. */
   globalFilterValue = signal('');
 
+  /** Currently selected status filter option (null = show all). */
+  selectedStatus: DocumentStatus | null = null;
+
   /** Options for the status filter dropdown. */
   readonly statusOptions: { label: string; value: DocumentStatus | null }[] = [
     { label: 'Todos los estados', value: null },
@@ -165,6 +168,7 @@ export class DocumentListComponent implements OnInit {
 
   /** Handles changes to the status filter dropdown. */
   onStatusChange(event: { value: DocumentStatus | null }, dt: Table): void {
+    this.selectedStatus = event.value;
     dt.filter(event.value, 'status', 'equals');
   }
 

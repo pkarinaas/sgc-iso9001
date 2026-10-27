@@ -6,7 +6,7 @@
   --sgc-surface: #ffffff;
 
   /* Brand colours */
-  --sgc-primary: #be123c;
+  --sgc-primary: #881337;
   --sgc-primary-hover: #9f1239;
   --sgc-accent-soft: #ffe4e6;
 
@@ -42,4 +42,210 @@ body {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Core Layout Utilities */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-row {
+  flex-direction: row;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.h-screen {
+  height: 100vh;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.w-64 {
+  width: 16rem;
+  min-width: 16rem;
+  max-width: 16rem;
+  flex-shrink: 0;
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+.bg-gray-50 {
+  background-color: #f9fafb;
+}
+
+.bg-white {
+  background-color: #ffffff;
+}
+
+.border-r {
+  border-right-width: 1px;
+  border-right-style: solid;
+}
+
+.border-t {
+  border-top-width: 1px;
+  border-top-style: solid;
+}
+
+.border-gray-200 {
+  border-color: #e5e7eb;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-3 {
+  gap: 0.75rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.transition-colors {
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.tracking-tight {
+  letter-spacing: -0.025em;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-gray-600 {
+  color: #4b5563;
+}
+
+.text-\[\#800020\] {
+  color: #800020;
+}
+
+.hover\:bg-gray-100:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.hover\:bg-rose-50:hover {
+  background-color: #fff1f2;
+}
+
+.\!bg-rose-50,
+.router-link-active {
+  background-color: #fff1f2 !important;
+}
+
+.\!text-\[\#800020\],
+.router-link-active {
+  color: #800020 !important;
+  font-weight: 600;
+}
+
+/* Primary button */
+.p-button-primary,
+button[severity='primary']:not([text='true']) {
+  background-color: #881337;
+  border-color: #881337;
+  color: #ffffff;
+}
+
+.p-button-primary:hover:not(:disabled),
+button[severity='primary']:not([text='true']):hover:not(:disabled) {
+  background-color: #9f1239;
+  border-color: #9f1239;
+}
+
+/* Select dropdown overlay & option styling matching design */
+.p-select-overlay .p-select-option,
+.p-select-list .p-select-option,
+.p-select-overlay .p-select-option .p-select-option-label,
+.p-select-list .p-select-option .p-select-option-label {
+  font-size: 0.8125rem !important;
+  padding: 0.4rem 0.75rem !important;
+}
+
+.p-select-overlay .p-select-option.p-select-option-selected,
+.p-select-overlay .p-select-option[aria-selected='true'],
+.p-select-list .p-select-option.p-select-option-selected,
+.p-select-list .p-select-option[aria-selected='true'] {
+  background-color: #fff1f2 !important;
+  color: #881337 !important;
+  font-weight: 500 !important;
+}
+
+.p-select-overlay .p-select-option:not(.p-select-option-selected):hover,
+.p-select-list .p-select-option:not(.p-select-option-selected):hover {
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
 }

@@ -104,4 +104,25 @@ describe('UserListComponent', () => {
     expect(component.globalFilterValue).toBe('Admin');
     expect(component.usersTable.filterGlobal).toHaveBeenCalledWith('Admin', 'contains');
   });
+
+  it('should disable the save button when userForm is invalid and enable it when valid', () => {
+    component.openCreateDialog();
+    fixture.detectChanges();
+
+    expect(component.userForm.invalid).toBe(true);
+
+    const saveButton = fixture.nativeElement.querySelector('#btn-dialog-save') as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(true);
+
+    component.userForm.patchValue({
+      full_name: 'Carlos Ruiz',
+      email: 'carlos@empresa.com',
+      password: 'password123',
+      role_id: 1,
+    });
+    fixture.detectChanges();
+
+    expect(component.userForm.valid).toBe(true);
+    expect(saveButton.disabled).toBe(false);
+  });
 });
