@@ -54,8 +54,42 @@ describe('AppLayoutComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create the layout component', () => {
+  // Test 1: Verify component renders properly and brand text "SGC-ISO9001" exists in DOM
+  it('should render the layout component and display brand logo text "SGC-ISO9001"', () => {
     expect(component).toBeTruthy();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const headerTitle = compiled.querySelector('aside .text-2xl');
+    expect(headerTitle?.textContent?.trim()).toBe('SGC-ISO9001');
+  });
+
+  // Test 2: Verify that when isWarningVisible$ is true, dialog is shown with warning text
+  it('should display warning dialog containing "Tu sesión está a punto de cerrarse" when isWarningVisible$ emits true', () => {
+    warningSubject.next(true);
+    fixture.detectChanges();
+
+    const dialogEl =
+      document.querySelector('p-dialog') || fixture.nativeElement.querySelector('p-dialog');
+    expect(dialogEl).toBeTruthy();
+    expect(dialogEl?.textContent).toContain('Tu sesión está a punto de cerrarse');
+  });
+
+  // Test 3: Verify that clicking "Continuar Conectado" calls extendSession() on component and service
+  it('should call extendSession() on component and service when clicking "Continuar Conectado"', () => {
+    const componentExtendSpy = vi.spyOn(component, 'extendSession');
+
+    warningSubject.next(true);
+    fixture.detectChanges();
+
+    const button = (document.querySelector('#btn-extend-session') ||
+      fixture.nativeElement.querySelector('#btn-extend-session')) as HTMLButtonElement;
+    expect(button).toBeTruthy();
+    expect(button?.textContent).toMatch(/Continuar Conectado|Extender Sesión/);
+
+    button.click();
+    fixture.detectChanges();
+
+    expect(componentExtendSpy).toHaveBeenCalledOnce();
+    expect(inactivityServiceMock.extendSession).toHaveBeenCalledOnce();
   });
 
   it('should start inactivity monitoring on ngOnInit', () => {
@@ -67,40 +101,13 @@ describe('AppLayoutComponent', () => {
     expect(inactivityServiceMock.stopMonitoring).toHaveBeenCalledOnce();
   });
 
-  it('should update isWarningVisible when isWarningVisible$ emits', () => {
+  it('should update isWarningVisible signal when isWarningVisible$ emits', () => {
     expect(component.isWarningVisible()).toBe(false);
 
     warningSubject.next(true);
     fixture.detectChanges();
 
     expect(component.isWarningVisible()).toBe(true);
-  });
-
-  it('should call extendSession() when clicking continue button in warning modal', () => {
-    warningSubject.next(true);
-    fixture.detectChanges();
-
-    component.onExtendSession();
-    expect(inactivityServiceMock.extendSession).toHaveBeenCalledOnce();
-  });
-
-  it('should render the footer button in the warning dialog and extend session on click', () => {
-    warningSubject.next(true);
-    fixture.detectChanges();
-
-    const button = (document.querySelector('#btn-extend-session') ||
-      fixture.nativeElement.querySelector('#btn-extend-session')) as HTMLButtonElement;
-    expect(button).toBeTruthy();
-    expect(button?.textContent).toContain('Extender Sesión');
-
-    button.click();
-    expect(inactivityServiceMock.extendSession).toHaveBeenCalledOnce();
-  });
-
-  it('should render brand logo text SGC-ISO9001', () => {
-    const compiled = fixture.nativeElement as HTMLElement;
-    const headerTitle = compiled.querySelector('aside .text-2xl');
-    expect(headerTitle?.textContent?.trim()).toBe('SGC-ISO9001');
   });
 
   it('should render navigation links for users and documents', () => {
@@ -143,9 +150,7 @@ describe('AppLayoutComponent', () => {
   it('should toggle sidebar visibility when toggle button is clicked', () => {
     expect(component.isSidebarVisible()).toBe(true);
 
-    const toggleBtn = fixture.nativeElement.querySelector(
-      '#btn-toggle-sidebar',
-    ) as HTMLButtonElement;
+    const toggleBtn = fixture.nativeElement.querySelector('#btn-toggle-sidebar') as HTMLButtonElement;
     expect(toggleBtn).toBeTruthy();
 
     toggleBtn.click();

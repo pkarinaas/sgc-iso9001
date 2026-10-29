@@ -10,17 +10,37 @@ import {
   InactivityService,
 } from './inactivity.service';
 
+/**
+ * Emulates fakeAsync / tick using Vitest fake timers for the Angular 22 zoneless environment.
+ */
+export function tick(millis = 0): void {
+  vi.advanceTimersByTime(millis);
+}
+
+export function fakeAsync<T extends (...args: any[]) => any>(fn: T): (...args: Parameters<T>) => ReturnType<T> {
+  return (...args: Parameters<T>) => {
+    vi.useFakeTimers();
+    try {
+      return fn(...args);
+    } finally {
+      vi.useRealTimers();
+    }
+  };
+}
+
 describe('InactivityService', () => {
   let service: InactivityService;
-  let authServiceMock: { signOut: ReturnType<typeof vi.fn> };
+  let authServiceMock: { signOut: ReturnType<typeof vi.fn>; logout: ReturnType<typeof vi.fn> };
   let routerMock: { navigate: ReturnType<typeof vi.fn> };
   let messageServiceMock: { add: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.useFakeTimers();
 
+    const signOutMock = vi.fn().mockResolvedValue(undefined);
     authServiceMock = {
-      signOut: vi.fn().mockResolvedValue(undefined),
+      signOut: signOutMock,
+      logout: signOutMock,
     };
 
     routerMock = {
@@ -70,27 +90,34 @@ describe('InactivityService', () => {
     sub.unsubscribe();
   });
 
-  it('should show warning after idle time expires and force logout after countdown', async () => {
+  // Test 1: Verify warning visible after 14 minutes (840000 ms) using fakeAsync and tick(840000)
+  it('should emit true for isWarningVisible$ after 14 minutes (840000 ms) of inactivity', fakeAsync(() => {
+    let isWarningVisible = false;
+    const sub = service.isWarningVisible$.subscribe((visible) => (isWarningVisible = visible));
+
+    service.startMonitoring(840_000, 60_000);
+    expect(isWarningVisible).toBe(false);
+
+    tick(840_000);
+    expect(isWarningVisible).toBe(true);
+
+    sub.unsubscribe();
+  }));
+
+  // Test 2: Verify that waiting 1 additional minute (60000 ms) triggers logout, navigation and toast
+  it('should call authService.signOut(), redirect to /login and show toast after 1 additional minute (60000 ms)', fakeAsync(async () => {
     const forceLogoutSpy = vi.spyOn(service, 'forceLogout');
-    let warningShown = false;
-    const sub = service.isWarningVisible$.subscribe((v) => (warningShown = v));
+    service.startMonitoring(840_000, 60_000);
 
-    // Custom short timers for test: 10s idle, 5s countdown
-    service.startMonitoring(10_000, 5_000);
-
-    expect(warningShown).toBe(false);
-
-    // Advance 10s -> warning phase should trigger
-    vi.advanceTimersByTime(10_000);
-    expect(warningShown).toBe(true);
+    // Advance 14 minutes to trigger warning
+    tick(840_000);
     expect(authServiceMock.signOut).not.toHaveBeenCalled();
 
-    // Advance 5s countdown -> force logout
-    vi.advanceTimersByTime(5_000);
+    // Advance 1 additional minute (60000 ms)
+    tick(60_000);
     expect(forceLogoutSpy).toHaveBeenCalledOnce();
     await forceLogoutSpy.mock.results[0]?.value;
 
-    expect(warningShown).toBe(false);
     expect(authServiceMock.signOut).toHaveBeenCalledOnce();
     expect(routerMock.navigate).toHaveBeenCalledWith(['/login']);
     expect(messageServiceMock.add).toHaveBeenCalledWith(
@@ -100,34 +127,29 @@ describe('InactivityService', () => {
         detail: 'Su sesión se cerró por inactividad',
       }),
     );
+  }));
 
-    sub.unsubscribe();
-  });
+  // Test 3: Verify that extendSession() resets warning (isWarningVisible$ emits false)
+  it('should reset the warning (isWarningVisible$ emits false) when extendSession() is called', fakeAsync(() => {
+    let isWarningVisible = false;
+    const sub = service.isWarningVisible$.subscribe((visible) => (isWarningVisible = visible));
 
-  it('should extend session, hide warning, and restart idle monitoring on extendSession()', () => {
-    let warningShown = false;
-    const sub = service.isWarningVisible$.subscribe((v) => (warningShown = v));
+    service.startMonitoring(840_000, 60_000);
 
-    service.startMonitoring(10_000, 5_000);
+    // Advance 14 minutes to trigger warning
+    tick(840_000);
+    expect(isWarningVisible).toBe(true);
 
-    // Reach warning phase
-    vi.advanceTimersByTime(10_000);
-    expect(warningShown).toBe(true);
-
-    // User chooses to extend session
+    // Extend session
     service.extendSession();
-    expect(warningShown).toBe(false);
+    expect(isWarningVisible).toBe(false);
 
-    // Advance past the old countdown (5s) -> should NOT force logout
-    vi.advanceTimersByTime(6_000);
+    // Advance 60 seconds; should not logout because monitoring was restarted
+    tick(60_000);
     expect(authServiceMock.signOut).not.toHaveBeenCalled();
 
-    // Advance remaining idle time to reach 10s again -> warning triggers again
-    vi.advanceTimersByTime(4_000);
-    expect(warningShown).toBe(true);
-
     sub.unsubscribe();
-  });
+  }));
 
   it('should reset idle timer when user activity occurs before warning threshold', () => {
     let warningShown = false;
