@@ -249,3 +249,10 @@ button[severity='primary']:not([text='true']):hover:not(:disabled) {
   background-color: #f8fafc !important;
   color: #1e293b !important;
 }
+
+/* Inactivity Dialog clean button without double borders */
+.p-dialog-footer .p-button,
+p-dialog .p-button.border-none {
+  border: none !important;
+  outline: none !important;
+}

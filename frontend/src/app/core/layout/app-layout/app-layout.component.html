@@ -79,3 +79,31 @@
     </main>
   </div>
 </div>
+
+<!-- Inactivity Warning Dialog -->
+<p-dialog
+  header="Inactividad detectada"
+  [visible]="(isWarningVisible$ | async) ?? false"
+  [closable]="false"
+  [modal]="true"
+  [style]="{ width: '400px' }"
+>
+  <p class="text-gray-600 m-0 leading-relaxed">
+    Tu sesión está a punto de cerrarse por inactividad. ¿Deseas extender la sesión?
+  </p>
+
+  <ng-template #footer>
+    <div class="flex justify-end mt-4">
+      <button
+        id="btn-extend-session"
+        type="button"
+        pButton
+        (click)="extendSession()"
+        class="flex items-center gap-2 bg-[#881337] hover:bg-[#9f1239] border-none text-white px-5 py-2 rounded-md shadow-sm transition-colors cursor-pointer font-medium"
+      >
+        <i class="pi pi-check"></i>
+        <span>Extender Sesión</span>
+      </button>
+    </div>
+  </ng-template>
+</p-dialog>

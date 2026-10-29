@@ -250,3 +250,10 @@ main {
   min-width: 0;
   box-sizing: border-box;
 }
+
+/* Inactivity Dialog Button reset */
+:host ::ng-deep .p-dialog-footer .p-button,
+:host ::ng-deep p-button button {
+  border: none !important;
+  outline: none !important;
+}
