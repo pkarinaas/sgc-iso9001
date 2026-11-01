@@ -194,4 +194,25 @@ describe('DocumentListComponent', () => {
     expect(component.formatVersion(1)).toBe('v01');
     expect(component.formatVersion(1.5)).toBe('v1.5');
   });
+
+  // Filter state & methods
+
+  it('should initialize selectedStatus to null and statusOptions with "Todos los estados"', () => {
+    expect(component.selectedStatus).toBeNull();
+    expect(component.statusOptions[0]).toEqual({ label: 'Todos los estados', value: null });
+  });
+
+  it('should update selectedStatus and filter documents table on status change', () => {
+    const filterSpy = vi.fn();
+    const mockTable = { filter: filterSpy } as any;
+
+    component.onStatusChange({ value: 'APPROVED' }, mockTable);
+
+    expect(component.selectedStatus).toBe('APPROVED');
+    expect(filterSpy).toHaveBeenCalledWith('APPROVED', 'status', 'equals');
+
+    component.onStatusChange({ value: null }, mockTable);
+    expect(component.selectedStatus).toBeNull();
+    expect(filterSpy).toHaveBeenCalledWith(null, 'status', 'equals');
+  });
 });

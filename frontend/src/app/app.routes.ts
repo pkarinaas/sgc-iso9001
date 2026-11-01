@@ -1,35 +1,34 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
-import { roleGuard } from './core/guards/role.guard';
+import { AppLayoutComponent } from './core/layout/app-layout/app-layout.component';
+import { LoginComponent } from './features/auth/login/login';
+import { UserListComponent } from './features/users/user-list/user-list';
+import { DocumentListComponent } from './features/documents/document-list/document-list';
 
 export const routes: Routes = [
   {
-    path: '',
-    redirectTo: 'dashboard',
-    pathMatch: 'full',
-  },
-  {
     path: 'login',
-    loadComponent: () => import('./features/auth/login/login').then((m) => m.LoginComponent),
+    component: LoginComponent,
   },
   {
-    path: 'dashboard',
-    redirectTo: 'documents',
-    pathMatch: 'full',
-  },
-  {
-    path: 'admin/users',
-    canActivate: [authGuard, roleGuard],
-    loadComponent: () =>
-      import('./features/users/user-list/user-list').then((m) => m.UserListComponent),
-  },
-  {
-    path: 'documents',
+    path: '',
+    component: AppLayoutComponent,
     canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/documents/document-list/document-list').then(
-        (m) => m.DocumentListComponent,
-      ),
+    children: [
+      {
+        path: 'users',
+        component: UserListComponent,
+      },
+      {
+        path: 'documents',
+        component: DocumentListComponent,
+      },
+      {
+        path: '',
+        redirectTo: 'documents',
+        pathMatch: 'full',
+      },
+    ],
   },
   {
     path: '**',

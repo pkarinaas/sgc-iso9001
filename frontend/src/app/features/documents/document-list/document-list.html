@@ -46,49 +46,53 @@
     >
       <!-- Caption: global search -->
       <ng-template #caption>
-        <div class="doc-list-filters flex flex-wrap items-center gap-4">
+        <div class="doc-list-filters">
           <!-- Global text search -->
-          <p-iconfield class="doc-list-filters__search flex-1 min-w-[240px]">
+          <p-iconfield class="doc-list-filters__search">
             <p-inputicon styleClass="pi pi-search" />
             <input
               id="input-doc-global-search"
               pInputText
+              pSize="small"
               type="text"
               [value]="globalFilterValue()"
               (input)="onGlobalFilter($event)"
               placeholder="Buscar por título o código..."
-              class="w-full h-[42px]"
-              [style.height.px]="42"
             />
           </p-iconfield>
 
           <!-- Status filter -->
           <p-select
+            id="select-doc-status-filter"
+            size="small"
             [options]="statusOptions"
+            [(ngModel)]="selectedStatus"
+            (onChange)="onStatusChange($event, dt)"
             optionLabel="label"
             optionValue="value"
             placeholder="Filtrar por estado"
-            (onChange)="onStatusChange($event, dt)"
-            class="w-full md:w-52 h-[42px]"
-            [style.height.px]="42"
-            appendTo="body"
-          ></p-select>
+            [showClear]="true"
+            class="doc-list-filters__select"
+          />
 
-          <!-- Date range filter -->
+          <!-- Date range filter: Desde -->
           <p-datepicker
+            id="datepicker-doc-start"
+            size="small"
             [(ngModel)]="startDate"
             dateFormat="dd/mm/yy"
             [showClear]="true"
             placeholder="Desde"
             (onSelect)="onDateFilterChange(dt)"
             (onClear)="onDateFilterChange(dt)"
-            class="w-full md:w-48 h-[42px]"
-            inputStyleClass="h-[42px]"
-            [inputStyle]="datePickerInputStyle"
-            [style.height.px]="42"
+            class="doc-list-filters__date"
             appendTo="body"
           ></p-datepicker>
+
+          <!-- Date range filter: Hasta -->
           <p-datepicker
+            id="datepicker-doc-end"
+            size="small"
             [(ngModel)]="endDate"
             dateFormat="dd/mm/yy"
             [showClear]="true"
@@ -96,10 +100,7 @@
             [minDate]="startDate"
             (onSelect)="onDateFilterChange(dt)"
             (onClear)="onDateFilterChange(dt)"
-            class="w-full md:w-48 h-[42px]"
-            inputStyleClass="h-[42px]"
-            [inputStyle]="datePickerInputStyle"
-            [style.height.px]="42"
+            class="doc-list-filters__date"
             appendTo="body"
           ></p-datepicker>
         </div>

@@ -8,6 +8,7 @@ import {
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { PrimeNG, PRIME_NG_CONFIG } from 'primeng/config';
+import { MessageService } from 'primeng/api';
 import Aura from '@primeng/themes/aura';
 import { definePreset } from '@primeuix/themes';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -48,6 +49,7 @@ const primeNGConfig = {
 
 export const appConfig: ApplicationConfig = {
   providers: [
+    MessageService,
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
     provideAnimationsAsync(),
