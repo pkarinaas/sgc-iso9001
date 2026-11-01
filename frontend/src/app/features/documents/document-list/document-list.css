@@ -223,6 +223,17 @@
   background-color: #f59e0b;
 }
 
+/* REVIEWED */
+.sgc-badge[data-status='REVIEWED'] {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.sgc-badge[data-status='REVIEWED'] .sgc-status__dot {
+  background-color: #0ea5e9;
+}
+
 /* APPROVED */
 .sgc-badge[data-status='APPROVED'] {
   background-color: #f0fdf4;

@@ -112,6 +112,7 @@ export class DocumentListComponent implements OnInit {
   readonly statusOptions: { label: string; value: DocumentStatus | null }[] = [
     { label: 'Todos los estados', value: null },
     { label: 'Borrador', value: 'DRAFT' },
+    { label: 'Revisado', value: 'REVIEWED' },
     { label: 'Aprobado', value: 'APPROVED' },
     { label: 'Obsoleto', value: 'OBSOLETE' },
   ];
@@ -188,6 +189,7 @@ export class DocumentListComponent implements OnInit {
   getStatusLabel(status: DocumentStatus | string): string {
     const labels: Record<string, string> = {
       DRAFT: 'Borrador',
+      REVIEWED: 'Revisado',
       APPROVED: 'Aprobado',
       OBSOLETE: 'Obsoleto',
     };

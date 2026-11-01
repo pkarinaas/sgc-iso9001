@@ -200,6 +200,8 @@ describe('DocumentListComponent', () => {
   it('should initialize selectedStatus to null and statusOptions with "Todos los estados"', () => {
     expect(component.selectedStatus).toBeNull();
     expect(component.statusOptions[0]).toEqual({ label: 'Todos los estados', value: null });
+    expect(component.statusOptions.some(opt => opt.value === 'REVIEWED' && opt.label === 'Revisado')).toBe(true);
+    expect(component.getStatusLabel('REVIEWED')).toBe('Revisado');
   });
 
   it('should update selectedStatus and filter documents table on status change', () => {
