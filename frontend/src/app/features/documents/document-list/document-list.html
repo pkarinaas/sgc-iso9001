@@ -1,4 +1,5 @@
 <p-toast />
+<p-confirmdialog [style]="{ width: '450px' }" />
 <section class="doc-list-page">
   <!-- Page header -->
   <header class="doc-list-header">
@@ -175,6 +176,21 @@
             >
               <i class="pi pi-eye"></i>
             </button>
+
+            <!-- Delete (only for DRAFT and REVIEWED documents) -->
+            @if (canDelete(doc)) {
+              <button
+                [id]="'btn-delete-' + doc.id"
+                type="button"
+                pButton
+                icon="pi pi-trash"
+                (click)="confirmDelete(doc)"
+                class="p-button-danger p-button-text p-button-rounded"
+                title="Eliminar documento"
+              >
+                <i class="pi pi-trash"></i>
+              </button>
+            }
           </td>
         </tr>
       </ng-template>

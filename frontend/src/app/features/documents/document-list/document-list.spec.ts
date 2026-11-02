@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { FilterService, MessageService } from 'primeng/api';
+import { FilterService, MessageService, ConfirmationService } from 'primeng/api';
 import { DocumentListComponent } from './document-list';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document } from '../../../core/models/document.model';
@@ -31,23 +31,34 @@ describe('DocumentListComponent', () => {
     error: signal<string | null>(null),
     loadDocuments: vi.fn().mockResolvedValue(undefined),
     createDocument: vi.fn().mockResolvedValue(undefined),
+    deleteDocument: vi.fn().mockResolvedValue(undefined),
   };
 
-  const mockMessageService = {
-    add: vi.fn(),
-    clear: vi.fn(),
-  };
+  let mockMessageService: MessageService;
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+    mockMessageService = new MessageService();
+    vi.spyOn(mockMessageService, 'add');
     await TestBed.configureTestingModule({
       imports: [DocumentListComponent],
       providers: [
         provideNoopAnimations(),
         FilterService,
+        ConfirmationService,
         { provide: DocumentService, useValue: mockDocumentService },
         { provide: MessageService, useValue: mockMessageService },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(DocumentListComponent, {
+        set: {
+          providers: [
+            { provide: MessageService, useValue: mockMessageService },
+            ConfirmationService,
+          ],
+        },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(DocumentListComponent);
     component = fixture.componentInstance;
@@ -216,5 +227,85 @@ describe('DocumentListComponent', () => {
     component.onStatusChange({ value: null }, mockTable);
     expect(component.selectedStatus).toBeNull();
     expect(filterSpy).toHaveBeenCalledWith(null, 'status', 'equals');
+  });
+
+  // Deletion logic and permissions
+
+  it('should allow deletion only for DRAFT and REVIEWED documents', () => {
+    const draftDoc = { ...mockDocuments[0], status: 'DRAFT' as const };
+    const reviewedDoc = { ...mockDocuments[0], status: 'REVIEWED' as const };
+    const approvedDoc = { ...mockDocuments[0], status: 'APPROVED' as const };
+    const obsoleteDoc = { ...mockDocuments[0], status: 'OBSOLETE' as const };
+
+    expect(component.canDelete(draftDoc)).toBe(true);
+    expect(component.canDelete(reviewedDoc)).toBe(true);
+    expect(component.canDelete(approvedDoc)).toBe(false);
+    expect(component.canDelete(obsoleteDoc)).toBe(false);
+  });
+
+  it('should trigger confirmation dialog with correct configuration on confirmDelete', () => {
+    const confirmationService = fixture.debugElement.injector.get(ConfirmationService);
+    const confirmSpy = vi.spyOn(confirmationService, 'confirm');
+
+    const draftDoc = { ...mockDocuments[0], status: 'DRAFT' as const };
+    component.confirmDelete(draftDoc);
+
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    const config = confirmSpy.mock.calls[0][0];
+    expect(config.header).toBe('Confirmar Eliminación');
+    expect(config.message).toBe('¿Estás seguro de que deseas eliminar este documento?');
+    expect(config.accept).toBeDefined();
+    expect(config.acceptButtonStyleClass).toBe('btn-confirm-accept');
+    expect(config.rejectButtonStyleClass).toBe('btn-confirm-cancel');
+    expect(config.acceptButtonProps).toEqual({ severity: 'primary' });
+    expect(config.rejectButtonProps).toEqual({ severity: 'secondary', text: true });
+  });
+
+  it('should call deleteDocument, show success toast and reload documents when delete is accepted', async () => {
+    const confirmationService = fixture.debugElement.injector.get(ConfirmationService);
+    let acceptCallback: (() => Promise<void>) | undefined;
+    vi.spyOn(confirmationService, 'confirm').mockImplementation((config: any) => {
+      acceptCallback = config.accept;
+      return confirmationService;
+    });
+
+    const draftDoc = { ...mockDocuments[0], id: 'doc-99', status: 'DRAFT' as const };
+    component.confirmDelete(draftDoc);
+
+    expect(acceptCallback).toBeDefined();
+    await acceptCallback!();
+
+    expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-99');
+    expect(mockMessageService.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'success',
+        summary: 'Éxito',
+        detail: 'Documento eliminado correctamente',
+      }),
+    );
+    expect(mockDocumentService.loadDocuments).toHaveBeenCalled();
+  });
+
+  it('should display error toast when deleteDocument fails', async () => {
+    mockDocumentService.deleteDocument.mockRejectedValueOnce(new Error('Violates row-level security policy'));
+    const confirmationService = fixture.debugElement.injector.get(ConfirmationService);
+    let acceptCallback: (() => Promise<void>) | undefined;
+    vi.spyOn(confirmationService, 'confirm').mockImplementation((config: any) => {
+      acceptCallback = config.accept;
+      return confirmationService;
+    });
+
+    const draftDoc = { ...mockDocuments[0], id: 'doc-99', status: 'DRAFT' as const };
+    component.confirmDelete(draftDoc);
+
+    expect(acceptCallback).toBeDefined();
+    await acceptCallback!();
+
+    expect(mockMessageService.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'error',
+        summary: 'Error',
+      }),
+    );
   });
 });

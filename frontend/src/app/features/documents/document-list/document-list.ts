@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
-import { MessageService, FilterService } from 'primeng/api';
+import { MessageService, FilterService, ConfirmationService } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonDirective } from 'primeng/button';
@@ -14,8 +14,9 @@ import { DialogModule } from 'primeng/dialog';
 import { FileUpload, FileUploadModule } from 'primeng/fileupload';
 import { PrimeNG } from 'primeng/config';
 import { ToastModule } from 'primeng/toast';
+import { ConfirmDialog } from 'primeng/confirmdialog';
 import { DocumentService } from '../../../core/services/document.service';
-import type { DocumentStatus } from '../../../core/models/document.model';
+import type { Document, DocumentStatus } from '../../../core/models/document.model';
 
 interface DateRangeFilter {
   start: Date | null;
@@ -50,13 +51,15 @@ interface DateRangeFilter {
     DialogModule,
     FileUploadModule,
     ToastModule,
+    ConfirmDialog,
   ],
-  providers: [MessageService],
+  providers: [MessageService, ConfirmationService],
 })
 export class DocumentListComponent implements OnInit {
   readonly documentService = inject(DocumentService);
   private readonly filterService = inject(FilterService);
   private readonly messageService = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
   private readonly fb = inject(FormBuilder);
   private readonly primeNG = inject(PrimeNG);
 
@@ -298,6 +301,65 @@ export class DocumentListComponent implements OnInit {
     } finally {
       this.isSubmitting = false;
     }
+  }
+
+  // Delete action methods
+
+  /**
+   * Determines whether the given document can be deleted.
+   * Business rule: only 'DRAFT' and 'REVIEWED' documents can be deleted.
+   *
+   * @param doc - The document to evaluate.
+   * @returns `true` if the document is in 'DRAFT' or 'REVIEWED' state, otherwise `false`.
+   */
+  canDelete(doc: Document): boolean {
+    return doc.status === 'DRAFT' || doc.status === 'REVIEWED';
+  }
+
+  /**
+   * Displays a confirmation dialog before deleting a document.
+   * If accepted, calls `DocumentService.deleteDocument()`, shows a success toast,
+   * and refreshes the document repository list.
+   *
+   * @param doc - The document to be deleted.
+   */
+  confirmDelete(doc: Document): void {
+    this.confirmationService.confirm({
+      header: 'Confirmar Eliminación',
+      message: '¿Estás seguro de que deseas eliminar este documento?',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sí, eliminar',
+      rejectLabel: 'Cancelar',
+      rejectButtonProps: {
+        severity: 'secondary',
+        text: true,
+      },
+      acceptButtonProps: {
+        severity: 'primary',
+      },
+      rejectButtonStyleClass: 'btn-confirm-cancel',
+      acceptButtonStyleClass: 'btn-confirm-accept',
+      accept: async () => {
+        try {
+          await this.documentService.deleteDocument(doc.id);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Éxito',
+            detail: 'Documento eliminado correctamente',
+            life: 4000,
+          });
+          await this.documentService.loadDocuments();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Error al eliminar el documento.';
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: this.formatErrorMessage(message),
+            life: 6000,
+          });
+        }
+      },
+    });
   }
 
   /**

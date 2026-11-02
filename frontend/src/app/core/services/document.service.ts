@@ -28,6 +28,22 @@ export class DocumentService {
   // Data-writing methods
 
   /**
+   * Deletes a document from `public.documents` by its ID.
+   *
+   * @param id - The ID of the document to delete.
+   * @throws Error message if DB deletion fails.
+   */
+  async deleteDocument(id: number | string): Promise<void> {
+    const { error } = await supabase.from('documents').delete().eq('id', id);
+
+    if (error) {
+      throw new Error(
+        `Error al eliminar el documento: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+  }
+
+  /**
    * Uploads a PDF file to Supabase Storage (`sgc-files` bucket) and inserts a
    * new row in `public.documents` with the provided metadata.
    *
