@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { supabase } from '../supabase/supabase.client';
-import type { Document } from '../models/document.model';
+import type { Document, DocumentStatus } from '../models/document.model';
 
 /**
  * DocumentService manages the reactive state for the Document Repository feature.
@@ -42,6 +42,27 @@ export class DocumentService {
       );
     }
   }
+
+  /**
+   * Updates the lifecycle status of a document in `public.documents`.
+   *
+   * @param id - The ID of the document to update.
+   * @param status - The new lifecycle status.
+   * @throws Error with message if DB update fails.
+   */
+  async updateDocumentStatus(id: number | string, status: DocumentStatus): Promise<void> {
+    const { error } = await supabase
+      .from('documents')
+      .update({ status })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(
+        `Error al actualizar el estado del documento: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+  }
+
 
   /**
    * Uploads a PDF file to Supabase Storage (`sgc-files` bucket) and inserts a

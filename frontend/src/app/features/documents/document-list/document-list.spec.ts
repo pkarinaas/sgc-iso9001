@@ -32,6 +32,7 @@ describe('DocumentListComponent', () => {
     loadDocuments: vi.fn().mockResolvedValue(undefined),
     createDocument: vi.fn().mockResolvedValue(undefined),
     deleteDocument: vi.fn().mockResolvedValue(undefined),
+    updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
   };
 
   let mockMessageService: MessageService;
@@ -307,5 +308,84 @@ describe('DocumentListComponent', () => {
         summary: 'Error',
       }),
     );
+  });
+
+  // Status modal & update tests
+
+  it('should correctly open status modal with filtered states based on current status', () => {
+    // DRAFT -> only REVIEWED
+    const draftDoc = { ...mockDocuments[0], status: 'DRAFT' as const };
+    component.openStatusModal(draftDoc);
+    expect(component.isStatusModalVisible).toBe(true);
+    expect(component.documentToChange).toEqual(draftDoc);
+    expect(component.availableStates).toEqual([{ label: 'Revisado', value: 'REVIEWED' }]);
+    expect(component.selectedNewStatus).toBe('REVIEWED');
+
+    // REVIEWED -> APPROVED or DRAFT
+    const reviewedDoc = { ...mockDocuments[0], status: 'REVIEWED' as const };
+    component.openStatusModal(reviewedDoc);
+    expect(component.availableStates).toEqual([
+      { label: 'Aprobado', value: 'APPROVED' },
+      { label: 'Borrador', value: 'DRAFT' },
+    ]);
+    expect(component.selectedNewStatus).toBe('APPROVED');
+
+    // APPROVED -> OBSOLETE
+    const approvedDoc = { ...mockDocuments[0], status: 'APPROVED' as const };
+    component.openStatusModal(approvedDoc);
+    expect(component.availableStates).toEqual([{ label: 'Obsoleto', value: 'OBSOLETE' }]);
+    expect(component.selectedNewStatus).toBe('OBSOLETE');
+
+    // OBSOLETE -> none
+    const obsoleteDoc = { ...mockDocuments[0], status: 'OBSOLETE' as const };
+    component.openStatusModal(obsoleteDoc);
+    expect(component.availableStates).toEqual([]);
+    expect(component.selectedNewStatus).toBeNull();
+  });
+
+  it('should reset state when closeStatusModal is called', () => {
+    const draftDoc = { ...mockDocuments[0], status: 'DRAFT' as const };
+    component.openStatusModal(draftDoc);
+    expect(component.isStatusModalVisible).toBe(true);
+
+    component.closeStatusModal();
+    expect(component.isStatusModalVisible).toBe(false);
+    expect(component.documentToChange).toBeNull();
+    expect(component.selectedNewStatus).toBeNull();
+    expect(component.availableStates).toEqual([]);
+  });
+
+  it('should call updateDocumentStatus, display success toast, close modal, and reload documents on saveStatus', async () => {
+    const draftDoc = { ...mockDocuments[0], id: 'doc-123', status: 'DRAFT' as const };
+    component.openStatusModal(draftDoc);
+
+    await component.saveStatus();
+
+    expect(mockDocumentService.updateDocumentStatus).toHaveBeenCalledWith('doc-123', 'REVIEWED');
+    expect(mockMessageService.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'success',
+        summary: 'Éxito',
+        detail: 'Estado actualizado',
+      }),
+    );
+    expect(component.isStatusModalVisible).toBe(false);
+    expect(mockDocumentService.loadDocuments).toHaveBeenCalled();
+  });
+
+  it('should display error toast when saveStatus fails', async () => {
+    mockDocumentService.updateDocumentStatus.mockRejectedValueOnce(new Error('Update failed'));
+    const draftDoc = { ...mockDocuments[0], id: 'doc-123', status: 'DRAFT' as const };
+    component.openStatusModal(draftDoc);
+
+    await component.saveStatus();
+
+    expect(mockMessageService.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'error',
+        summary: 'Error',
+      }),
+    );
+    expect(component.isUpdatingStatus).toBe(false);
   });
 });

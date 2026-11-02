@@ -150,47 +150,62 @@
 
           <!-- Action buttons -->
           <td class="col-actions">
-            <!-- Download -->
-            <button
-              [id]="'btn-download-' + doc.id"
-              type="button"
-              pButton
-              [text]="true"
-              [rounded]="true"
-              severity="secondary"
-              title="Descargar documento"
-              [disabled]="!doc.file_url"
-            >
-              <i class="pi pi-download"></i>
-            </button>
-
-            <!-- View -->
-            <button
-              [id]="'btn-view-' + doc.id"
-              type="button"
-              pButton
-              [text]="true"
-              [rounded]="true"
-              severity="info"
-              title="Ver documento"
-            >
-              <i class="pi pi-eye"></i>
-            </button>
-
-            <!-- Delete (only for DRAFT and REVIEWED documents) -->
-            @if (canDelete(doc)) {
+            <div class="flex flex-row items-center justify-center gap-2 whitespace-nowrap">
+              <!-- Download -->
               <button
-                [id]="'btn-delete-' + doc.id"
+                [id]="'btn-download-' + doc.id"
                 type="button"
                 pButton
-                icon="pi pi-trash"
-                (click)="confirmDelete(doc)"
-                class="p-button-danger p-button-text p-button-rounded"
-                title="Eliminar documento"
+                icon="pi pi-download"
+                class="p-button-secondary p-button-text p-button-rounded p-button-sm"
+                pTooltip="Descargar documento"
+                [disabled]="!doc.file_url"
               >
-                <i class="pi pi-trash"></i>
+                <i class="pi pi-download"></i>
               </button>
-            }
+
+              <!-- View -->
+              <button
+                [id]="'btn-view-' + doc.id"
+                type="button"
+                pButton
+                icon="pi pi-eye"
+                class="p-button-info p-button-text p-button-rounded p-button-sm"
+                pTooltip="Ver documento"
+              >
+                <i class="pi pi-eye"></i>
+              </button>
+
+              <!-- Change Status (only if not OBSOLETE) -->
+              @if (doc.status !== 'OBSOLETE') {
+                <button
+                  [id]="'btn-status-' + doc.id"
+                  type="button"
+                  pButton
+                  icon="pi pi-sync"
+                  (click)="openStatusModal(doc)"
+                  class="p-button-secondary p-button-text p-button-rounded p-button-sm"
+                  pTooltip="Cambiar Estado"
+                >
+                  <i class="pi pi-sync"></i>
+                </button>
+              }
+
+              <!-- Delete (only for DRAFT and REVIEWED documents) -->
+              @if (canDelete(doc)) {
+                <button
+                  [id]="'btn-delete-' + doc.id"
+                  type="button"
+                  pButton
+                  icon="pi pi-trash"
+                  (click)="confirmDelete(doc)"
+                  class="p-button-danger p-button-text p-button-rounded p-button-sm"
+                  pTooltip="Eliminar documento"
+                >
+                  <i class="pi pi-trash"></i>
+                </button>
+              }
+            </div>
           </td>
         </tr>
       </ng-template>
@@ -330,4 +345,76 @@
       </button>
     </div>
   </form>
+</p-dialog>
+
+<!-- Change Status Dialog Modal -->
+<p-dialog
+  [(visible)]="isStatusModalVisible"
+  [modal]="true"
+  [style]="{ width: '400px' }"
+  header="Cambiar Estado del Documento"
+  [closable]="true"
+  (onHide)="closeStatusModal()"
+>
+  <div class="doc-dialog-form">
+    @if (documentToChange) {
+      <div class="mb-3 text-sm text-gray-600">
+        <p class="m-0 mb-1">
+          <span class="font-semibold text-gray-700">Documento:</span>
+          {{ documentToChange.title }}
+        </p>
+        <p class="m-0">
+          <span class="font-semibold text-gray-700">Estado actual:</span>
+          <span class="sgc-badge ml-1" [attr.data-status]="documentToChange.status">
+            <span class="sgc-status__dot"></span>
+            {{ getStatusLabel(documentToChange.status) }}
+          </span>
+        </p>
+      </div>
+    }
+
+    <div class="doc-form-field">
+      <label for="select-new-status" class="doc-form-label">
+        Nuevo Estado <span class="required-mark">*</span>
+      </label>
+      <p-select
+        id="select-new-status"
+        [(ngModel)]="selectedNewStatus"
+        [options]="availableStates"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Seleccionar nuevo estado"
+        class="w-full"
+        appendTo="body"
+      />
+    </div>
+  </div>
+
+  <ng-template #footer pTemplate="footer">
+    <div class="doc-form-actions">
+      <button
+        id="btn-cancel-status"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        class="p-button-text p-button-secondary"
+        (click)="closeStatusModal()"
+        [disabled]="isUpdatingStatus"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button
+        id="btn-save-status"
+        type="button"
+        pButton
+        class="doc-dialog-btn-save"
+        (click)="saveStatus()"
+        [loading]="isUpdatingStatus"
+        [disabled]="!selectedNewStatus || isUpdatingStatus"
+      >
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </ng-template>
 </p-dialog>

@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
-import { MessageService, FilterService, ConfirmationService } from 'primeng/api';
+import { MessageService, FilterService, ConfirmationService, SharedModule } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonDirective } from 'primeng/button';
@@ -15,6 +15,7 @@ import { FileUpload, FileUploadModule } from 'primeng/fileupload';
 import { PrimeNG } from 'primeng/config';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialog } from 'primeng/confirmdialog';
+import { Tooltip } from 'primeng/tooltip';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document, DocumentStatus } from '../../../core/models/document.model';
 
@@ -52,6 +53,8 @@ interface DateRangeFilter {
     FileUploadModule,
     ToastModule,
     ConfirmDialog,
+    Tooltip,
+    SharedModule,
   ],
   providers: [MessageService, ConfirmationService],
 })
@@ -76,6 +79,38 @@ export class DocumentListComponent implements OnInit {
 
   /** True while the upload/save operation is in-flight. */
   isSubmitting = false;
+
+  // Status change modal state
+
+  /** Controls the visibility of the change status dialog modal. */
+  isStatusModalVisible = false;
+
+  /** Document currently selected for status update. */
+  documentToChange: Document | null = null;
+
+  /** New status selected in the dropdown. */
+  selectedNewStatus: DocumentStatus | null = null;
+
+  /** Available lifecycle state transitions for the selected document. */
+  availableStates: { label: string; value: DocumentStatus }[] = [];
+
+  /** True while the status update request is in-flight. */
+  isUpdatingStatus = false;
+
+  /** Allowed status transitions according to ISO 9001 workflow. */
+  readonly allowedTransitions: Record<DocumentStatus, { label: string; value: DocumentStatus }[]> = {
+    DRAFT: [
+      { label: 'Revisado', value: 'REVIEWED' },
+    ],
+    REVIEWED: [
+      { label: 'Aprobado', value: 'APPROVED' },
+      { label: 'Borrador', value: 'DRAFT' },
+    ],
+    APPROVED: [
+      { label: 'Obsoleto', value: 'OBSOLETE' },
+    ],
+    OBSOLETE: [],
+  };
 
   // Form constants
 
@@ -300,6 +335,70 @@ export class DocumentListComponent implements OnInit {
       });
     } finally {
       this.isSubmitting = false;
+    }
+  }
+
+  // Status modal methods
+
+  /**
+   * Opens the change status dialog modal for a selected document,
+   * filtering available states based on current document status.
+   *
+   * @param doc - The document whose status is to be modified.
+   */
+  openStatusModal(doc: Document): void {
+    this.documentToChange = doc;
+    this.availableStates = this.allowedTransitions[doc.status] ?? [];
+    this.selectedNewStatus = this.availableStates.length > 0 ? this.availableStates[0].value : null;
+    this.isStatusModalVisible = true;
+  }
+
+  /**
+   * Closes the change status dialog modal and resets transient state.
+   */
+  closeStatusModal(): void {
+    this.isStatusModalVisible = false;
+    this.documentToChange = null;
+    this.selectedNewStatus = null;
+    this.availableStates = [];
+  }
+
+  /**
+   * Saves the newly selected status via DocumentService.
+   * Shows a success toast, refreshes the document repository, and closes the modal.
+   */
+  async saveStatus(): Promise<void> {
+    if (!this.documentToChange || !this.selectedNewStatus || this.isUpdatingStatus) {
+      return;
+    }
+
+    this.isUpdatingStatus = true;
+    try {
+      await this.documentService.updateDocumentStatus(
+        this.documentToChange.id,
+        this.selectedNewStatus,
+      );
+
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Éxito',
+        detail: 'Estado actualizado',
+        life: 4000,
+      });
+
+      this.closeStatusModal();
+      await this.documentService.loadDocuments();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Error al actualizar el estado del documento.';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: this.formatErrorMessage(message),
+        life: 6000,
+      });
+    } finally {
+      this.isUpdatingStatus = false;
     }
   }
 

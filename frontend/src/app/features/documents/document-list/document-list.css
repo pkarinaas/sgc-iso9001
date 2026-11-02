@@ -259,7 +259,8 @@
 /* Center-align the actions column header and cells */
 .col-actions {
   text-align: center !important;
-  width: 9.5rem;
+  width: 11.5rem;
+  min-width: 11.5rem;
 }
 
 /* Sortable header cells */
@@ -507,6 +508,10 @@
 
 /* Guardar button */
 :host ::ng-deep #btn-dialog-save.p-button,
+:host ::ng-deep #btn-save-status.p-button,
+:host ::ng-deep .doc-dialog-btn-save,
+#btn-save-status,
+.doc-dialog-btn-save,
 #btn-dialog-save {
   background-color: #881337 !important;
   border-color: #881337 !important;
@@ -514,12 +519,20 @@
 }
 
 :host ::ng-deep #btn-dialog-save.p-button:hover:not(:disabled),
+:host ::ng-deep #btn-save-status.p-button:hover:not(:disabled),
+:host ::ng-deep .doc-dialog-btn-save:hover:not(:disabled),
+#btn-save-status:hover:not(:disabled),
+.doc-dialog-btn-save:hover:not(:disabled),
 #btn-dialog-save:hover:not(:disabled) {
   background-color: #9f1239 !important;
   border-color: #9f1239 !important;
 }
 
 :host ::ng-deep #btn-dialog-save.p-button:disabled,
+:host ::ng-deep #btn-save-status.p-button:disabled,
+:host ::ng-deep .doc-dialog-btn-save:disabled,
+#btn-save-status:disabled,
+.doc-dialog-btn-save:disabled,
 #btn-dialog-save:disabled {
   background-color: #881337 !important;
   border-color: #881337 !important;
