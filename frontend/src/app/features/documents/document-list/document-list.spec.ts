@@ -33,6 +33,7 @@ describe('DocumentListComponent', () => {
     createDocument: vi.fn().mockResolvedValue(undefined),
     deleteDocument: vi.fn().mockResolvedValue(undefined),
     updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
+    getNextVersionForCode: vi.fn().mockResolvedValue(1),
   };
 
   let mockMessageService: MessageService;
@@ -78,36 +79,18 @@ describe('DocumentListComponent', () => {
 
     expect(component.documentForm.get('title')?.value).toBe('');
     expect(component.documentForm.get('code')?.value).toBe('');
-    expect(component.documentForm.get('version')?.value).toBe('00');
     expect(component.documentForm.get('file')?.value).toBeNull();
     expect(component.documentForm.invalid).toBe(true);
   });
 
   // Form validation
 
-  it('should validate that title, version and file are required and version allows 00 and 01', () => {
+  it('should validate that title and file are required', () => {
     const titleCtrl = component.documentForm.get('title');
-    const versionCtrl = component.documentForm.get('version');
     const fileCtrl = component.documentForm.get('file');
 
     expect(titleCtrl?.valid).toBe(false);
     expect(titleCtrl?.hasError('required')).toBe(true);
-
-    // Version allows '00' and '01'
-    expect(versionCtrl?.valid).toBe(true);
-    versionCtrl?.setValue('00');
-    expect(versionCtrl?.valid).toBe(true);
-    versionCtrl?.setValue('01');
-    expect(versionCtrl?.valid).toBe(true);
-
-    // Non-numeric characters are invalid
-    versionCtrl?.setValue('abc');
-    expect(versionCtrl?.valid).toBe(false);
-    expect(versionCtrl?.hasError('pattern')).toBe(true);
-
-    versionCtrl?.setValue('');
-    expect(versionCtrl?.valid).toBe(false);
-    expect(versionCtrl?.hasError('required')).toBe(true);
 
     expect(fileCtrl?.valid).toBe(false);
     expect(fileCtrl?.hasError('required')).toBe(true);
@@ -152,7 +135,6 @@ describe('DocumentListComponent', () => {
     component.documentForm.patchValue({
       title: 'Procedimiento de Auditoría',
       code: 'SGC-PRC-002',
-      version: '03',
       file: new File(['content'], 'test.pdf', { type: 'application/pdf' }),
     });
 
@@ -161,7 +143,6 @@ describe('DocumentListComponent', () => {
     expect(component.isDialogVisible).toBe(true);
     expect(component.documentForm.get('title')?.value).toBe('');
     expect(component.documentForm.get('code')?.value).toBe('');
-    expect(component.documentForm.get('version')?.value).toBe('00');
     expect(component.documentForm.get('file')?.value).toBeNull();
   });
 
@@ -183,13 +164,12 @@ describe('DocumentListComponent', () => {
     expect(component.documentForm.get('file')?.valid).toBe(true);
   });
 
-  it('should mark form valid when all required fields (title, numeric version, valid-size file) are provided', () => {
+  it('should mark form valid when all required fields (title, valid-size file) are provided', () => {
     const fakeFile = new File(['dummy'], 'norma.pdf', { type: 'application/pdf' });
 
     component.documentForm.patchValue({
       title: 'Política de Calidad',
       code: 'SGC-POL-001',
-      version: '00',
       file: fakeFile,
     });
 
@@ -387,5 +367,37 @@ describe('DocumentListComponent', () => {
       }),
     );
     expect(component.isUpdatingStatus).toBe(false);
+  });
+
+  // Subtask 4: Automated Versioning & Upload without manual version field
+
+  it('should allow entering an existing code without validation error', () => {
+    const codeCtrl = component.documentForm.get('code');
+    codeCtrl?.setValue('SGC-MAN-001');
+    expect(codeCtrl?.valid).toBe(true);
+    expect(codeCtrl?.errors).toBeNull();
+  });
+
+  it('should call createDocument with title and code without manual version on saveDocument', async () => {
+    const fakeFile = new File(['dummy'], 'norma.pdf', { type: 'application/pdf' });
+    component.documentForm.patchValue({
+      title: 'Política de Calidad',
+      code: 'SGC-POL-001',
+      file: fakeFile,
+    });
+
+    await component.saveDocument();
+
+    expect(mockDocumentService.createDocument).toHaveBeenCalledWith(fakeFile, {
+      title: 'Política de Calidad',
+      code: 'SGC-POL-001',
+    });
+    expect(mockMessageService.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'success',
+        summary: 'Documento guardado',
+      }),
+    );
+    expect(component.isDialogVisible).toBe(false);
   });
 });

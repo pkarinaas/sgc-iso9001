@@ -76,12 +76,69 @@ export class DocumentService {
    * @param metadata - Partial document metadata (title, code, version).
    * @throws Error with a descriptive message when Storage upload or DB insert fails.
    */
+  /**
+   * Retrieves the next version number for a given document code.
+   *  - If documents with the code exist: returns max(version) + 1.
+   *  - If no documents exist with the code: returns 0.
+   *
+   * @param code - The document code to look up.
+   * @returns Next integer version number (0, 1, 2, ...).
+   */
+  async getNextVersionForCode(code: string): Promise<number> {
+    const cleanCode = code?.trim();
+    if (!cleanCode) {
+      return 0;
+    }
+
+    const { data, error } = await supabase
+      .from('documents')
+      .select('version')
+      .eq('code', cleanCode)
+      .order('version', { ascending: false })
+      .limit(1);
+
+    if (
+      error ||
+      !data ||
+      data.length === 0 ||
+      data[0].version === null ||
+      data[0].version === undefined
+    ) {
+      return 0;
+    }
+
+    return Number(data[0].version) + 1;
+  }
+
   async createDocument(file: File, metadata: Partial<Document>): Promise<void> {
+    const cleanCode = metadata.code?.trim() || null;
+    let nextVersion = 0;
+
+    if (cleanCode) {
+      const { data: versionData } = await supabase
+        .from('documents')
+        .select('version')
+        .eq('code', cleanCode)
+        .order('version', { ascending: false })
+        .limit(1);
+
+      if (
+        versionData &&
+        versionData.length > 0 &&
+        versionData[0].version !== null &&
+        versionData[0].version !== undefined
+      ) {
+        nextVersion = Number(versionData[0].version) + 1;
+      }
+    } else if (metadata.version !== undefined && metadata.version !== null) {
+      nextVersion = Number(metadata.version);
+    }
+
     const titleSlug = (metadata.title ?? '').trim().replace(/\s+/g, '_');
-    const version = metadata.version ?? '00';
-    const fileName = metadata.code?.trim()
-      ? `${metadata.code.trim()}_${titleSlug}_v${version}.pdf`
-      : `${titleSlug}_v${version}.pdf`;
+    const versionStr = String(nextVersion).padStart(2, '0');
+    const fileName = cleanCode
+      ? `${cleanCode}_${titleSlug}_v${versionStr}.pdf`
+      : `${titleSlug}_v${versionStr}.pdf`;
 
     // Upload file to Storage (with upsert: true in case a retry happens)
     const { error: storageError } = await supabase.storage
@@ -102,8 +159,8 @@ export class DocumentService {
     // Insert metadata into public.documents (creator_id is injected by DB default)
     const { error: dbError } = await supabase.from('documents').insert({
       title: metadata.title,
-      code: metadata.code?.trim() || null,
-      version: metadata.version !== undefined ? Number(metadata.version) : 0,
+      code: cleanCode,
+      version: nextVersion,
       file_url: fileUrl,
     });
 

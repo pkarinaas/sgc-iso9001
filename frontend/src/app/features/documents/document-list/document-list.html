@@ -267,35 +267,6 @@
       />
     </div>
 
-    <!-- Numeric input for Version -->
-    <div class="doc-form-field">
-      <label for="input-doc-version" class="doc-form-label">
-        Versión <span class="required-mark">*</span>
-      </label>
-      <input
-        id="input-doc-version"
-        type="text"
-        pInputText
-        formControlName="version"
-        placeholder="00"
-        class="doc-form-input"
-        inputmode="numeric"
-        maxlength="10"
-        [class.ng-invalid]="
-          documentForm.controls.version.invalid && documentForm.controls.version.touched
-        "
-      />
-      @if (documentForm.controls.version.invalid && documentForm.controls.version.touched) {
-        <small class="doc-form-error">
-          @if (documentForm.controls.version.errors?.['required']) {
-            La versión es obligatoria.
-          } @else if (documentForm.controls.version.errors?.['pattern']) {
-            La versión debe ser numérica (ej. 00, 01).
-          }
-        </small>
-      }
-    </div>
-
     <!-- Upload component -->
     <div class="doc-form-field">
       <label class="doc-form-label"> Archivo PDF <span class="required-mark">*</span> </label>

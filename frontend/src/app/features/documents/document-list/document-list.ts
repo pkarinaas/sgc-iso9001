@@ -122,7 +122,6 @@ export class DocumentListComponent implements OnInit {
   readonly documentForm = this.fb.group({
     title: ['', [Validators.required]],
     code: [''],
-    version: ['00', [Validators.required, Validators.pattern(/^[0-9]+$/)]],
     file: [null as File | null, [Validators.required, DocumentListComponent.fileSizeValidator]],
   });
 
@@ -259,7 +258,6 @@ export class DocumentListComponent implements OnInit {
     this.documentForm.reset({
       title: '',
       code: '',
-      version: '00',
       file: null,
     });
     this.fileUpload?.clear();
@@ -304,14 +302,13 @@ export class DocumentListComponent implements OnInit {
       return;
     }
 
-    const { file, title, code, version } = this.documentForm.value;
+    const { file, title, code } = this.documentForm.value;
 
     this.isSubmitting = true;
     try {
       await this.documentService.createDocument(file!, {
         title: title!,
         code: code ?? '',
-        version: version! as any,
       });
 
       this.messageService.add({
@@ -322,7 +319,7 @@ export class DocumentListComponent implements OnInit {
       });
 
       this.isDialogVisible = false;
-      this.documentForm.reset({ title: '', code: '', version: '00', file: null });
+      this.documentForm.reset({ title: '', code: '', file: null });
       this.fileUpload?.clear();
       await this.documentService.loadDocuments();
     } catch (error) {
