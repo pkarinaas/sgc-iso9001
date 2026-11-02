@@ -10,16 +10,18 @@
       </p>
     </div>
 
-    <button
-      id="btn-upload-document"
-      type="button"
-      pButton
-      class="btn-upload-document"
-      (click)="openUploadDialog()"
-    >
-      <i class="pi pi-upload" pButtonIcon></i>
-      <span pButtonLabel>Subir Documento</span>
-    </button>
+    @if (canViewActions()) {
+      <button
+        id="btn-upload-document"
+        type="button"
+        pButton
+        class="btn-upload-document"
+        (click)="openUploadDialog()"
+      >
+        <i class="pi pi-upload" pButtonIcon></i>
+        <span pButtonLabel>Subir Documento</span>
+      </button>
+    }
   </header>
 
   <!-- Error banner -->
@@ -34,7 +36,7 @@
   <div class="doc-list-table-card">
     <p-table
       #dt
-      [value]="documentService.documents()"
+      [value]="displayedDocuments"
       [loading]="documentService.loading()"
       [paginator]="true"
       [rows]="10"
@@ -64,16 +66,18 @@
 
           <!-- Status filter -->
           <p-select
+            #statusSelect
             id="select-doc-status-filter"
             size="small"
             [options]="statusOptions"
             [(ngModel)]="selectedStatus"
-            (onChange)="onStatusChange($event, dt)"
+            (onChange)="onStatusChange($event, dt, statusSelect)"
             optionLabel="label"
             optionValue="value"
             placeholder="Filtrar por estado"
             [showClear]="true"
             class="doc-list-filters__select"
+            appendTo="body"
           />
 
           <!-- Date range filter: Desde -->
@@ -176,8 +180,8 @@
                 <i class="pi pi-eye"></i>
               </button>
 
-              <!-- Change Status (only if not OBSOLETE) -->
-              @if (doc.status !== 'OBSOLETE') {
+              <!-- Change Status (role-based) -->
+              @if (canChangeStatus(doc)) {
                 <button
                   [id]="'btn-status-' + doc.id"
                   type="button"

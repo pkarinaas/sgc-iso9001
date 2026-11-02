@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { FilterService, MessageService, ConfirmationService } from 'primeng/api';
 import { DocumentListComponent } from './document-list';
+import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document } from '../../../core/models/document.model';
 
@@ -24,6 +25,11 @@ describe('DocumentListComponent', () => {
       updated_at: new Date().toISOString(),
     },
   ];
+
+  const mockAuthService = {
+    getUserRole: vi.fn().mockResolvedValue('ADMIN'),
+    userRole: signal<string | null>('ADMIN'),
+  };
 
   const mockDocumentService = {
     documents: signal<Document[]>(mockDocuments),
@@ -48,6 +54,7 @@ describe('DocumentListComponent', () => {
         provideNoopAnimations(),
         FilterService,
         ConfirmationService,
+        { provide: AuthService, useValue: mockAuthService },
         { provide: DocumentService, useValue: mockDocumentService },
         { provide: MessageService, useValue: mockMessageService },
       ],
@@ -192,7 +199,9 @@ describe('DocumentListComponent', () => {
   it('should initialize selectedStatus to null and statusOptions with "Todos los estados"', () => {
     expect(component.selectedStatus).toBeNull();
     expect(component.statusOptions[0]).toEqual({ label: 'Todos los estados', value: null });
-    expect(component.statusOptions.some(opt => opt.value === 'REVIEWED' && opt.label === 'Revisado')).toBe(true);
+    expect(
+      component.statusOptions.some((opt) => opt.value === 'REVIEWED' && opt.label === 'Revisado'),
+    ).toBe(true);
     expect(component.getStatusLabel('REVIEWED')).toBe('Revisado');
   });
 
@@ -208,6 +217,16 @@ describe('DocumentListComponent', () => {
     component.onStatusChange({ value: null }, mockTable);
     expect(component.selectedStatus).toBeNull();
     expect(filterSpy).toHaveBeenCalledWith(null, 'status', 'equals');
+  });
+
+  it('should call hide on the select component when onStatusChange is triggered', () => {
+    const filterSpy = vi.fn();
+    const mockTable = { filter: filterSpy } as any;
+    const mockSelect = { hide: vi.fn() } as any;
+
+    component.onStatusChange({ value: 'REVIEWED' }, mockTable, mockSelect);
+
+    expect(mockSelect.hide).toHaveBeenCalled();
   });
 
   // Deletion logic and permissions
@@ -268,7 +287,9 @@ describe('DocumentListComponent', () => {
   });
 
   it('should display error toast when deleteDocument fails', async () => {
-    mockDocumentService.deleteDocument.mockRejectedValueOnce(new Error('Violates row-level security policy'));
+    mockDocumentService.deleteDocument.mockRejectedValueOnce(
+      new Error('Violates row-level security policy'),
+    );
     const confirmationService = fixture.debugElement.injector.get(ConfirmationService);
     let acceptCallback: (() => Promise<void>) | undefined;
     vi.spyOn(confirmationService, 'confirm').mockImplementation((config: any) => {
@@ -369,7 +390,7 @@ describe('DocumentListComponent', () => {
     expect(component.isUpdatingStatus).toBe(false);
   });
 
-  // Subtask 4: Automated Versioning & Upload without manual version field
+  // Automated Versioning & Upload without manual version field
 
   it('should allow entering an existing code without validation error', () => {
     const codeCtrl = component.documentForm.get('code');
@@ -399,5 +420,122 @@ describe('DocumentListComponent', () => {
       }),
     );
     expect(component.isDialogVisible).toBe(false);
+  });
+
+  // Role-based actions and obsolete filtering
+
+  describe('Default Obsolete Filtering', () => {
+    it('should hide OBSOLETE documents by default when selectedStatus is null', () => {
+      const mixedDocs: Document[] = [
+        { ...mockDocuments[0], id: 'doc-draft', status: 'DRAFT' },
+        { ...mockDocuments[0], id: 'doc-reviewed', status: 'REVIEWED' },
+        { ...mockDocuments[0], id: 'doc-approved', status: 'APPROVED' },
+        { ...mockDocuments[0], id: 'doc-obsolete', status: 'OBSOLETE' },
+      ];
+      mockDocumentService.documents.set(mixedDocs);
+      component.selectedStatus = null;
+
+      const displayed = component.displayedDocuments;
+
+      expect(displayed.length).toBe(3);
+      expect(displayed.some((d) => d.status === 'OBSOLETE')).toBe(false);
+      expect(displayed.map((d) => d.status)).toEqual(['DRAFT', 'REVIEWED', 'APPROVED']);
+    });
+
+    it('should include OBSOLETE documents when selectedStatus is explicitly OBSOLETE', () => {
+      const mixedDocs: Document[] = [
+        { ...mockDocuments[0], id: 'doc-approved', status: 'APPROVED' },
+        { ...mockDocuments[0], id: 'doc-obsolete', status: 'OBSOLETE' },
+      ];
+      mockDocumentService.documents.set(mixedDocs);
+      component.selectedStatus = 'OBSOLETE';
+
+      const displayed = component.displayedDocuments;
+
+      expect(displayed.length).toBe(2);
+      expect(displayed.some((d) => d.status === 'OBSOLETE')).toBe(true);
+    });
+  });
+
+  describe('Role-Based Action Logic', () => {
+    const draftDoc: Document = { ...mockDocuments[0], id: 'd-1', status: 'DRAFT' };
+    const reviewedDoc: Document = { ...mockDocuments[0], id: 'd-2', status: 'REVIEWED' };
+    const approvedDoc: Document = { ...mockDocuments[0], id: 'd-3', status: 'APPROVED' };
+    const obsoleteDoc: Document = { ...mockDocuments[0], id: 'd-4', status: 'OBSOLETE' };
+
+    it('canViewActions should return false for VIEWER and true for other roles', () => {
+      expect(component.canViewActions('VIEWER')).toBe(false);
+      expect(component.canViewActions('ADMIN')).toBe(true);
+      expect(component.canViewActions('EDITOR')).toBe(true);
+      expect(component.canViewActions('REVIEWER')).toBe(true);
+      expect(component.canViewActions('APPROVER')).toBe(true);
+    });
+
+    it('canDelete should return false for VIEWER for all document states', () => {
+      expect(component.canDelete(draftDoc, 'VIEWER')).toBe(false);
+      expect(component.canDelete(reviewedDoc, 'VIEWER')).toBe(false);
+      expect(component.canDelete(approvedDoc, 'VIEWER')).toBe(false);
+      expect(component.canDelete(obsoleteDoc, 'VIEWER')).toBe(false);
+    });
+
+    it('canDelete should return true for allowed roles only on DRAFT and REVIEWED documents', () => {
+      ['ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER'].forEach((role) => {
+        expect(component.canDelete(draftDoc, role)).toBe(true);
+        expect(component.canDelete(reviewedDoc, role)).toBe(true);
+        // Traceability rule: NO ONE can delete APPROVED or OBSOLETE
+        expect(component.canDelete(approvedDoc, role)).toBe(false);
+        expect(component.canDelete(obsoleteDoc, role)).toBe(false);
+      });
+    });
+
+    it('canChangeStatus should return false for VIEWER for all states', () => {
+      expect(component.canChangeStatus(draftDoc, 'VIEWER')).toBe(false);
+      expect(component.canChangeStatus(reviewedDoc, 'VIEWER')).toBe(false);
+      expect(component.canChangeStatus(approvedDoc, 'VIEWER')).toBe(false);
+      expect(component.canChangeStatus(obsoleteDoc, 'VIEWER')).toBe(false);
+    });
+
+    it('canChangeStatus should return false for OBSOLETE documents for all roles', () => {
+      ['ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER', 'VIEWER'].forEach((role) => {
+        expect(component.canChangeStatus(obsoleteDoc, role)).toBe(false);
+      });
+    });
+
+    it('canChangeStatus for EDITOR: only allows transitioning DRAFT documents', () => {
+      expect(component.canChangeStatus(draftDoc, 'EDITOR')).toBe(true);
+      expect(component.canChangeStatus(reviewedDoc, 'EDITOR')).toBe(false);
+      expect(component.canChangeStatus(approvedDoc, 'EDITOR')).toBe(false);
+    });
+
+    it('canChangeStatus for REVIEWER: allows transitioning DRAFT and REVIEWED documents', () => {
+      expect(component.canChangeStatus(draftDoc, 'REVIEWER')).toBe(true);
+      expect(component.canChangeStatus(reviewedDoc, 'REVIEWER')).toBe(true);
+      expect(component.canChangeStatus(approvedDoc, 'REVIEWER')).toBe(false);
+    });
+
+    it('canChangeStatus for APPROVER: allows transitioning REVIEWED and APPROVED documents', () => {
+      expect(component.canChangeStatus(draftDoc, 'APPROVER')).toBe(false);
+      expect(component.canChangeStatus(reviewedDoc, 'APPROVER')).toBe(true);
+      expect(component.canChangeStatus(approvedDoc, 'APPROVER')).toBe(true);
+    });
+
+    it('canChangeStatus for ADMIN: allows transitioning DRAFT, REVIEWED, and APPROVED documents', () => {
+      expect(component.canChangeStatus(draftDoc, 'ADMIN')).toBe(true);
+      expect(component.canChangeStatus(reviewedDoc, 'ADMIN')).toBe(true);
+      expect(component.canChangeStatus(approvedDoc, 'ADMIN')).toBe(true);
+    });
+
+    it('should not render upload, status, or delete buttons in DOM when role is VIEWER', () => {
+      component.currentUserRole = 'VIEWER';
+      fixture.detectChanges();
+
+      const uploadBtn = fixture.nativeElement.querySelector('#btn-upload-document');
+      const statusBtn = fixture.nativeElement.querySelector('#btn-status-' + mockDocuments[0].id);
+      const deleteBtn = fixture.nativeElement.querySelector('#btn-delete-' + mockDocuments[0].id);
+
+      expect(uploadBtn).toBeNull();
+      expect(statusBtn).toBeNull();
+      expect(deleteBtn).toBeNull();
+    });
   });
 });

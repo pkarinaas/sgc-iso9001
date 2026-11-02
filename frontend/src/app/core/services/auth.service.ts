@@ -43,6 +43,12 @@ export class AuthService {
   /** Derived boolean Signal: true when the user has an active session. */
   readonly isAuthenticated = computed(() => this._session() !== null);
 
+  /** Writable signal holding the current user's role name. */
+  private readonly _userRole = signal<string | null>(null);
+
+  /** Public read-only view of the current user's role. */
+  readonly userRole = this._userRole.asReadonly();
+
   /**
    * Promise that resolves once the initial `getSession()` call completes.
    */
@@ -65,6 +71,9 @@ export class AuthService {
     // Keep the session Signal in sync with Supabase auth state changes.
     supabase.auth.onAuthStateChange((_event, session) => {
       this._session.set(session);
+      if (!session) {
+        this._userRole.set(null);
+      }
       this._initialized.set(true);
     });
   }
@@ -102,10 +111,53 @@ export class AuthService {
     return { session: data.session, error };
   }
 
+  /**
+   * Retrieves the current user's role from the public.users table.
+   * Caches the value in the `_userRole` signal.
+   *
+   * @returns The role name ('ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER', 'VIEWER') or null.
+   */
+  async getUserRole(): Promise<string | null> {
+    if (this._userRole()) {
+      return this._userRole();
+    }
+    await this.waitForInitialization();
+    const session = this._session();
+    if (!session) {
+      this._userRole.set(null);
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('roles(name)')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error || !data) {
+        this._userRole.set(null);
+        return null;
+      }
+
+      const roleName = Array.isArray(data.roles)
+        ? data.roles[0]?.name
+        : (data.roles as any)?.name;
+
+      const roleStr = roleName ?? null;
+      this._userRole.set(roleStr);
+      return roleStr;
+    } catch {
+      this._userRole.set(null);
+      return null;
+    }
+  }
+
   /** Signs the current user out and navigates to the login page. */
   async signOut(): Promise<void> {
     await supabase.auth.signOut();
     this._session.set(null);
+    this._userRole.set(null);
     await this.router.navigate(['/login']);
   }
 }

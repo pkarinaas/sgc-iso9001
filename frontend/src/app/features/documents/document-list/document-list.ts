@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { MessageService, FilterService, ConfirmationService, SharedModule } from 'primeng/api';
@@ -16,6 +16,7 @@ import { PrimeNG } from 'primeng/config';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { Tooltip } from 'primeng/tooltip';
+import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document, DocumentStatus } from '../../../core/models/document.model';
 
@@ -59,7 +60,11 @@ interface DateRangeFilter {
   providers: [MessageService, ConfirmationService],
 })
 export class DocumentListComponent implements OnInit {
+  readonly authService = inject(AuthService);
   readonly documentService = inject(DocumentService);
+
+  /** Current role of the authenticated user (e.g. 'ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER', 'VIEWER'). */
+  currentUserRole: string | null = null;
   private readonly filterService = inject(FilterService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
@@ -71,6 +76,9 @@ export class DocumentListComponent implements OnInit {
 
   /** Reference to the file upload component to reset its file state. */
   @ViewChild('fileUpload') fileUpload?: FileUpload;
+
+  /** Reference to the status filter p-select component. */
+  @ViewChild('statusSelect') statusSelect?: Select;
 
   // Dialog state
 
@@ -142,8 +150,34 @@ export class DocumentListComponent implements OnInit {
   /** Current value of the global text search input. */
   globalFilterValue = signal('');
 
-  /** Currently selected status filter option (null = show all). */
-  selectedStatus: DocumentStatus | null = null;
+  private readonly _selectedStatus = signal<DocumentStatus | null>(null);
+
+  /** Currently selected status filter option (null = show all except OBSOLETE). */
+  get selectedStatus(): DocumentStatus | null {
+    return this._selectedStatus();
+  }
+
+  set selectedStatus(value: DocumentStatus | null) {
+    this._selectedStatus.set(value);
+  }
+
+  private readonly _displayedDocuments = computed(() => {
+    const all = this.documentService.documents();
+    const status = this._selectedStatus();
+    if (status === 'OBSOLETE') {
+      return all;
+    }
+    return all.filter((doc) => doc.status !== 'OBSOLETE');
+  });
+
+  /**
+   * Computed list of documents to display in the table.
+   * By default ('Todos los estados' or null), documents with status 'OBSOLETE' are hidden.
+   * Obsolete documents are only displayed if the user explicitly selects 'OBSOLETE' from the status dropdown filter.
+   */
+  get displayedDocuments(): Document[] {
+    return this._displayedDocuments();
+  }
 
   /** Options for the status filter dropdown. */
   readonly statusOptions: { label: string; value: DocumentStatus | null }[] = [
@@ -192,6 +226,7 @@ export class DocumentListComponent implements OnInit {
       fileChosenMessage: '{0} archivos seleccionados',
       fileSizeTypes: ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
     });
+    this.currentUserRole = await this.authService.getUserRole();
     await this.documentService.loadDocuments();
   }
 
@@ -204,10 +239,11 @@ export class DocumentListComponent implements OnInit {
     this.documentsTable.filterGlobal(input.value, 'contains');
   }
 
-  /** Handles changes to the status filter dropdown. */
-  onStatusChange(event: { value: DocumentStatus | null }, dt: Table): void {
+  /** Handles changes to the status filter dropdown and ensures the dropdown closes. */
+  onStatusChange(event: { value: DocumentStatus | null }, dt: Table, statusSelect?: Select): void {
     this.selectedStatus = event.value;
     dt.filter(event.value, 'status', 'equals');
+    (statusSelect ?? this.statusSelect)?.hide();
   }
 
   /** Handles changes to the date range filters. */
@@ -399,17 +435,70 @@ export class DocumentListComponent implements OnInit {
     }
   }
 
-  // Delete action methods
+  // Role-based action helpers
+
+  /**
+   * Determines whether management actions should be visible for the given role.
+   * Returns false if the role is 'VIEWER'.
+   *
+   * @param role - Optional role to check (defaults to current user's role).
+   * @returns `false` if role is 'VIEWER', otherwise `true`.
+   */
+  canViewActions(role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    return activeRole !== 'VIEWER';
+  }
 
   /**
    * Determines whether the given document can be deleted.
-   * Business rule: only 'DRAFT' and 'REVIEWED' documents can be deleted.
+   * Business rule: only 'DRAFT' and 'REVIEWED' documents can be deleted,
+   * and users with 'VIEWER' role cannot delete any document.
    *
    * @param doc - The document to evaluate.
-   * @returns `true` if the document is in 'DRAFT' or 'REVIEWED' state, otherwise `false`.
+   * @param role - Optional role to evaluate against (defaults to current user's role).
+   * @returns `true` if the document is in 'DRAFT' or 'REVIEWED' state and role is not 'VIEWER', otherwise `false`.
    */
-  canDelete(doc: Document): boolean {
+  canDelete(doc: Document, role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    if (activeRole === 'VIEWER') {
+      return false;
+    }
     return doc.status === 'DRAFT' || doc.status === 'REVIEWED';
+  }
+
+  /**
+   * Determines whether the user has permissions to transition a document's status.
+   *
+   * Role-based permissions matching Supabase RLS:
+   *  - 'ADMIN': Can transition 'DRAFT', 'REVIEWED', 'APPROVED'.
+   *  - 'EDITOR': Can only transition 'DRAFT'.
+   *  - 'REVIEWER': Can transition 'DRAFT' or 'REVIEWED'.
+   *  - 'APPROVER': Can transition 'REVIEWED' or 'APPROVED'.
+   *  - 'VIEWER': Cannot transition any document.
+   *  - 'OBSOLETE' documents cannot transition in any role.
+   *
+   * @param doc - The document to evaluate.
+   * @param role - Optional role to evaluate against (defaults to current user's role).
+   * @returns `true` if the status change action is allowed for the user's role, `false` otherwise.
+   */
+  canChangeStatus(doc: Document, role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    if (!activeRole || activeRole === 'VIEWER' || doc.status === 'OBSOLETE') {
+      return false;
+    }
+
+    switch (activeRole) {
+      case 'ADMIN':
+        return true;
+      case 'EDITOR':
+        return doc.status === 'DRAFT';
+      case 'REVIEWER':
+        return doc.status === 'DRAFT' || doc.status === 'REVIEWED';
+      case 'APPROVER':
+        return doc.status === 'REVIEWED' || doc.status === 'APPROVED';
+      default:
+        return false;
+    }
   }
 
   /**
