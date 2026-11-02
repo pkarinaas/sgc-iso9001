@@ -1,7 +1,7 @@
-import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
-import { MessageService, FilterService } from 'primeng/api';
+import { MessageService, FilterService, ConfirmationService, SharedModule } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonDirective } from 'primeng/button';
@@ -14,8 +14,11 @@ import { DialogModule } from 'primeng/dialog';
 import { FileUpload, FileUploadModule } from 'primeng/fileupload';
 import { PrimeNG } from 'primeng/config';
 import { ToastModule } from 'primeng/toast';
+import { ConfirmDialog } from 'primeng/confirmdialog';
+import { Tooltip } from 'primeng/tooltip';
+import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
-import type { DocumentStatus } from '../../../core/models/document.model';
+import type { Document, DocumentStatus } from '../../../core/models/document.model';
 
 interface DateRangeFilter {
   start: Date | null;
@@ -50,13 +53,21 @@ interface DateRangeFilter {
     DialogModule,
     FileUploadModule,
     ToastModule,
+    ConfirmDialog,
+    Tooltip,
+    SharedModule,
   ],
-  providers: [MessageService],
+  providers: [MessageService, ConfirmationService],
 })
 export class DocumentListComponent implements OnInit {
+  readonly authService = inject(AuthService);
   readonly documentService = inject(DocumentService);
+
+  /** Current role of the authenticated user (e.g. 'ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER', 'VIEWER'). */
+  currentUserRole: string | null = null;
   private readonly filterService = inject(FilterService);
   private readonly messageService = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
   private readonly fb = inject(FormBuilder);
   private readonly primeNG = inject(PrimeNG);
 
@@ -66,6 +77,9 @@ export class DocumentListComponent implements OnInit {
   /** Reference to the file upload component to reset its file state. */
   @ViewChild('fileUpload') fileUpload?: FileUpload;
 
+  /** Reference to the status filter p-select component. */
+  @ViewChild('statusSelect') statusSelect?: Select;
+
   // Dialog state
 
   /** Controls the visibility of the upload document dialog modal. */
@@ -73,6 +87,38 @@ export class DocumentListComponent implements OnInit {
 
   /** True while the upload/save operation is in-flight. */
   isSubmitting = false;
+
+  // Status change modal state
+
+  /** Controls the visibility of the change status dialog modal. */
+  isStatusModalVisible = false;
+
+  /** Document currently selected for status update. */
+  documentToChange: Document | null = null;
+
+  /** New status selected in the dropdown. */
+  selectedNewStatus: DocumentStatus | null = null;
+
+  /** Available lifecycle state transitions for the selected document. */
+  availableStates: { label: string; value: DocumentStatus }[] = [];
+
+  /** True while the status update request is in-flight. */
+  isUpdatingStatus = false;
+
+  /** Allowed status transitions according to ISO 9001 workflow. */
+  readonly allowedTransitions: Record<DocumentStatus, { label: string; value: DocumentStatus }[]> = {
+    DRAFT: [
+      { label: 'Revisado', value: 'REVIEWED' },
+    ],
+    REVIEWED: [
+      { label: 'Aprobado', value: 'APPROVED' },
+      { label: 'Borrador', value: 'DRAFT' },
+    ],
+    APPROVED: [
+      { label: 'Obsoleto', value: 'OBSOLETE' },
+    ],
+    OBSOLETE: [],
+  };
 
   // Form constants
 
@@ -84,7 +130,6 @@ export class DocumentListComponent implements OnInit {
   readonly documentForm = this.fb.group({
     title: ['', [Validators.required]],
     code: [''],
-    version: ['00', [Validators.required, Validators.pattern(/^[0-9]+$/)]],
     file: [null as File | null, [Validators.required, DocumentListComponent.fileSizeValidator]],
   });
 
@@ -105,13 +150,40 @@ export class DocumentListComponent implements OnInit {
   /** Current value of the global text search input. */
   globalFilterValue = signal('');
 
-  /** Currently selected status filter option (null = show all). */
-  selectedStatus: DocumentStatus | null = null;
+  private readonly _selectedStatus = signal<DocumentStatus | null>(null);
+
+  /** Currently selected status filter option (null = show all except OBSOLETE). */
+  get selectedStatus(): DocumentStatus | null {
+    return this._selectedStatus();
+  }
+
+  set selectedStatus(value: DocumentStatus | null) {
+    this._selectedStatus.set(value);
+  }
+
+  private readonly _displayedDocuments = computed(() => {
+    const all = this.documentService.documents();
+    const status = this._selectedStatus();
+    if (status === 'OBSOLETE') {
+      return all;
+    }
+    return all.filter((doc) => doc.status !== 'OBSOLETE');
+  });
+
+  /**
+   * Computed list of documents to display in the table.
+   * By default ('Todos los estados' or null), documents with status 'OBSOLETE' are hidden.
+   * Obsolete documents are only displayed if the user explicitly selects 'OBSOLETE' from the status dropdown filter.
+   */
+  get displayedDocuments(): Document[] {
+    return this._displayedDocuments();
+  }
 
   /** Options for the status filter dropdown. */
   readonly statusOptions: { label: string; value: DocumentStatus | null }[] = [
     { label: 'Todos los estados', value: null },
     { label: 'Borrador', value: 'DRAFT' },
+    { label: 'Revisado', value: 'REVIEWED' },
     { label: 'Aprobado', value: 'APPROVED' },
     { label: 'Obsoleto', value: 'OBSOLETE' },
   ];
@@ -154,6 +226,7 @@ export class DocumentListComponent implements OnInit {
       fileChosenMessage: '{0} archivos seleccionados',
       fileSizeTypes: ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
     });
+    this.currentUserRole = await this.authService.getUserRole();
     await this.documentService.loadDocuments();
   }
 
@@ -166,10 +239,11 @@ export class DocumentListComponent implements OnInit {
     this.documentsTable.filterGlobal(input.value, 'contains');
   }
 
-  /** Handles changes to the status filter dropdown. */
-  onStatusChange(event: { value: DocumentStatus | null }, dt: Table): void {
+  /** Handles changes to the status filter dropdown and ensures the dropdown closes. */
+  onStatusChange(event: { value: DocumentStatus | null }, dt: Table, statusSelect?: Select): void {
     this.selectedStatus = event.value;
     dt.filter(event.value, 'status', 'equals');
+    (statusSelect ?? this.statusSelect)?.hide();
   }
 
   /** Handles changes to the date range filters. */
@@ -188,6 +262,7 @@ export class DocumentListComponent implements OnInit {
   getStatusLabel(status: DocumentStatus | string): string {
     const labels: Record<string, string> = {
       DRAFT: 'Borrador',
+      REVIEWED: 'Revisado',
       APPROVED: 'Aprobado',
       OBSOLETE: 'Obsoleto',
     };
@@ -219,7 +294,6 @@ export class DocumentListComponent implements OnInit {
     this.documentForm.reset({
       title: '',
       code: '',
-      version: '00',
       file: null,
     });
     this.fileUpload?.clear();
@@ -264,14 +338,13 @@ export class DocumentListComponent implements OnInit {
       return;
     }
 
-    const { file, title, code, version } = this.documentForm.value;
+    const { file, title, code } = this.documentForm.value;
 
     this.isSubmitting = true;
     try {
       await this.documentService.createDocument(file!, {
         title: title!,
         code: code ?? '',
-        version: version! as any,
       });
 
       this.messageService.add({
@@ -282,7 +355,7 @@ export class DocumentListComponent implements OnInit {
       });
 
       this.isDialogVisible = false;
-      this.documentForm.reset({ title: '', code: '', version: '00', file: null });
+      this.documentForm.reset({ title: '', code: '', file: null });
       this.fileUpload?.clear();
       await this.documentService.loadDocuments();
     } catch (error) {
@@ -296,6 +369,182 @@ export class DocumentListComponent implements OnInit {
     } finally {
       this.isSubmitting = false;
     }
+  }
+
+  // Status modal methods
+
+  /**
+   * Opens the change status dialog modal for a selected document,
+   * filtering available states based on current document status.
+   *
+   * @param doc - The document whose status is to be modified.
+   */
+  openStatusModal(doc: Document): void {
+    this.documentToChange = doc;
+    this.availableStates = this.allowedTransitions[doc.status] ?? [];
+    this.selectedNewStatus = this.availableStates.length > 0 ? this.availableStates[0].value : null;
+    this.isStatusModalVisible = true;
+  }
+
+  /**
+   * Closes the change status dialog modal and resets transient state.
+   */
+  closeStatusModal(): void {
+    this.isStatusModalVisible = false;
+    this.documentToChange = null;
+    this.selectedNewStatus = null;
+    this.availableStates = [];
+  }
+
+  /**
+   * Saves the newly selected status via DocumentService.
+   * Shows a success toast, refreshes the document repository, and closes the modal.
+   */
+  async saveStatus(): Promise<void> {
+    if (!this.documentToChange || !this.selectedNewStatus || this.isUpdatingStatus) {
+      return;
+    }
+
+    this.isUpdatingStatus = true;
+    try {
+      await this.documentService.updateDocumentStatus(
+        this.documentToChange.id,
+        this.selectedNewStatus,
+      );
+
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Éxito',
+        detail: 'Estado actualizado',
+        life: 4000,
+      });
+
+      this.closeStatusModal();
+      await this.documentService.loadDocuments();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Error al actualizar el estado del documento.';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: this.formatErrorMessage(message),
+        life: 6000,
+      });
+    } finally {
+      this.isUpdatingStatus = false;
+    }
+  }
+
+  // Role-based action helpers
+
+  /**
+   * Determines whether management actions should be visible for the given role.
+   * Returns false if the role is 'VIEWER'.
+   *
+   * @param role - Optional role to check (defaults to current user's role).
+   * @returns `false` if role is 'VIEWER', otherwise `true`.
+   */
+  canViewActions(role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    return activeRole !== 'VIEWER';
+  }
+
+  /**
+   * Determines whether the given document can be deleted.
+   * Business rule: only 'DRAFT' and 'REVIEWED' documents can be deleted,
+   * and users with 'VIEWER' role cannot delete any document.
+   *
+   * @param doc - The document to evaluate.
+   * @param role - Optional role to evaluate against (defaults to current user's role).
+   * @returns `true` if the document is in 'DRAFT' or 'REVIEWED' state and role is not 'VIEWER', otherwise `false`.
+   */
+  canDelete(doc: Document, role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    if (activeRole === 'VIEWER') {
+      return false;
+    }
+    return doc.status === 'DRAFT' || doc.status === 'REVIEWED';
+  }
+
+  /**
+   * Determines whether the user has permissions to transition a document's status.
+   *
+   * Role-based permissions matching Supabase RLS:
+   *  - 'ADMIN': Can transition 'DRAFT', 'REVIEWED', 'APPROVED'.
+   *  - 'EDITOR': Can only transition 'DRAFT'.
+   *  - 'REVIEWER': Can transition 'DRAFT' or 'REVIEWED'.
+   *  - 'APPROVER': Can transition 'REVIEWED' or 'APPROVED'.
+   *  - 'VIEWER': Cannot transition any document.
+   *  - 'OBSOLETE' documents cannot transition in any role.
+   *
+   * @param doc - The document to evaluate.
+   * @param role - Optional role to evaluate against (defaults to current user's role).
+   * @returns `true` if the status change action is allowed for the user's role, `false` otherwise.
+   */
+  canChangeStatus(doc: Document, role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    if (!activeRole || activeRole === 'VIEWER' || doc.status === 'OBSOLETE') {
+      return false;
+    }
+
+    switch (activeRole) {
+      case 'ADMIN':
+        return true;
+      case 'EDITOR':
+        return doc.status === 'DRAFT';
+      case 'REVIEWER':
+        return doc.status === 'DRAFT' || doc.status === 'REVIEWED';
+      case 'APPROVER':
+        return doc.status === 'REVIEWED' || doc.status === 'APPROVED';
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Displays a confirmation dialog before deleting a document.
+   * If accepted, calls `DocumentService.deleteDocument()`, shows a success toast,
+   * and refreshes the document repository list.
+   *
+   * @param doc - The document to be deleted.
+   */
+  confirmDelete(doc: Document): void {
+    this.confirmationService.confirm({
+      header: 'Confirmar Eliminación',
+      message: '¿Estás seguro de que deseas eliminar este documento?',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sí, eliminar',
+      rejectLabel: 'Cancelar',
+      rejectButtonProps: {
+        severity: 'secondary',
+        text: true,
+      },
+      acceptButtonProps: {
+        severity: 'primary',
+      },
+      rejectButtonStyleClass: 'btn-confirm-cancel',
+      acceptButtonStyleClass: 'btn-confirm-accept',
+      accept: async () => {
+        try {
+          await this.documentService.deleteDocument(doc.id);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Éxito',
+            detail: 'Documento eliminado correctamente',
+            life: 4000,
+          });
+          await this.documentService.loadDocuments();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Error al eliminar el documento.';
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: this.formatErrorMessage(message),
+            life: 6000,
+          });
+        }
+      },
+    });
   }
 
   /**

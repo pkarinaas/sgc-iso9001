@@ -223,6 +223,17 @@
   background-color: #f59e0b;
 }
 
+/* REVIEWED */
+.sgc-badge[data-status='REVIEWED'] {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.sgc-badge[data-status='REVIEWED'] .sgc-status__dot {
+  background-color: #0ea5e9;
+}
+
 /* APPROVED */
 .sgc-badge[data-status='APPROVED'] {
   background-color: #f0fdf4;
@@ -248,7 +259,8 @@
 /* Center-align the actions column header and cells */
 .col-actions {
   text-align: center !important;
-  width: 8rem;
+  width: 11.5rem;
+  min-width: 11.5rem;
 }
 
 /* Sortable header cells */
@@ -496,6 +508,10 @@
 
 /* Guardar button */
 :host ::ng-deep #btn-dialog-save.p-button,
+:host ::ng-deep #btn-save-status.p-button,
+:host ::ng-deep .doc-dialog-btn-save,
+#btn-save-status,
+.doc-dialog-btn-save,
 #btn-dialog-save {
   background-color: #881337 !important;
   border-color: #881337 !important;
@@ -503,16 +519,64 @@
 }
 
 :host ::ng-deep #btn-dialog-save.p-button:hover:not(:disabled),
+:host ::ng-deep #btn-save-status.p-button:hover:not(:disabled),
+:host ::ng-deep .doc-dialog-btn-save:hover:not(:disabled),
+#btn-save-status:hover:not(:disabled),
+.doc-dialog-btn-save:hover:not(:disabled),
 #btn-dialog-save:hover:not(:disabled) {
   background-color: #9f1239 !important;
   border-color: #9f1239 !important;
 }
 
 :host ::ng-deep #btn-dialog-save.p-button:disabled,
+:host ::ng-deep #btn-save-status.p-button:disabled,
+:host ::ng-deep .doc-dialog-btn-save:disabled,
+#btn-save-status:disabled,
+.doc-dialog-btn-save:disabled,
 #btn-dialog-save:disabled {
   background-color: #881337 !important;
   border-color: #881337 !important;
   color: #ffffff !important;
   opacity: 0.5 !important;
   cursor: not-allowed !important;
+}
+
+/* Confirm Dialog buttons */
+:host ::ng-deep .p-confirmdialog .p-confirmdialog-reject-button,
+:host ::ng-deep .btn-confirm-cancel {
+  background: transparent !important;
+  border: none !important;
+  color: #475569 !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  border-radius: 6px !important;
+  padding: 0.45rem 1rem !important;
+  transition: all 0.15s ease !important;
+  box-shadow: none !important;
+}
+
+:host ::ng-deep .p-confirmdialog .p-confirmdialog-reject-button:hover,
+:host ::ng-deep .btn-confirm-cancel:hover {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border: none !important;
+}
+
+:host ::ng-deep .p-confirmdialog .p-confirmdialog-accept-button,
+:host ::ng-deep .btn-confirm-accept {
+  background-color: #881337 !important;
+  border: 1px solid #881337 !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  border-radius: 6px !important;
+  padding: 0.45rem 1rem !important;
+  transition: all 0.15s ease !important;
+}
+
+:host ::ng-deep .p-confirmdialog .p-confirmdialog-accept-button:hover:not(:disabled),
+:host ::ng-deep .btn-confirm-accept:hover:not(:disabled) {
+  background-color: #9f1239 !important;
+  border-color: #9f1239 !important;
+  color: #ffffff !important;
 }

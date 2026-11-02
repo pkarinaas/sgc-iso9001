@@ -250,6 +250,46 @@ button[severity='primary']:not([text='true']):hover:not(:disabled) {
   color: #1e293b !important;
 }
 
+/* Confirm Dialog buttons */
+.p-confirmdialog .p-confirmdialog-reject-button,
+.btn-confirm-cancel {
+  background: transparent !important;
+  border: none !important;
+  color: #475569 !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  border-radius: 6px !important;
+  padding: 0.45rem 1rem !important;
+  transition: all 0.15s ease !important;
+  box-shadow: none !important;
+}
+
+.p-confirmdialog .p-confirmdialog-reject-button:hover,
+.btn-confirm-cancel:hover {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border: none !important;
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button,
+.btn-confirm-accept {
+  background-color: #881337 !important;
+  border: 1px solid #881337 !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  border-radius: 6px !important;
+  padding: 0.45rem 1rem !important;
+  transition: all 0.15s ease !important;
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button:hover:not(:disabled),
+.btn-confirm-accept:hover:not(:disabled) {
+  background-color: #9f1239 !important;
+  border-color: #9f1239 !important;
+  color: #ffffff !important;
+}
+
 /* Inactivity Dialog clean button without double borders */
 .p-dialog-footer .p-button,
 p-dialog .p-button.border-none {
