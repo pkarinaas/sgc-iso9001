@@ -1,4 +1,13 @@
-import { ChangeDetectorRef, Component, computed, inject, OnInit, signal, ViewChild } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  computed,
+  HostListener,
+  inject,
+  OnInit,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { DatePipe } from '@angular/common';
 import {
   FormsModule,
@@ -111,6 +120,16 @@ export class DocumentListComponent implements OnInit {
 
   /** URL of the PDF document currently loaded in the viewer. */
   currentPdfUrl: string | null = null;
+
+  /** Shortcuts to ignore in ngx-extended-pdf-viewer to prevent download/print. */
+  readonly pdfViewerIgnoreKeys: string[] = [
+    'ctrl+s',
+    'cmd+s',
+    'meta+s',
+    'ctrl+p',
+    'cmd+p',
+    'meta+p',
+  ];
 
   // Status change modal state
 
@@ -364,6 +383,52 @@ export class DocumentListComponent implements OnInit {
     this.isPdfViewerVisible = false;
     this.currentPdfUrl = null;
     this.cdr.markForCheck();
+  }
+
+  // PDF Viewer security event listeners
+
+  /**
+   * Intercepts and blocks the context menu (right-click) exclusively while
+   * the PDF viewer modal is open to comply with ISO 9001 security requirements.
+   *
+   * @param event - The native mouse event.
+   */
+  @HostListener('window:contextmenu', ['$event'])
+  @HostListener('document:contextmenu', ['$event'])
+  onWindowContextMenu(event: MouseEvent): void {
+    if (this.isPdfViewerVisible) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+    }
+  }
+
+  /**
+   * Intercepts and blocks print (Ctrl+P / Cmd+P) and save (Ctrl+S / Cmd+S)
+   * shortcuts exclusively while the PDF viewer modal is open.
+   *
+   * @param event - The native keyboard event.
+   */
+  @HostListener('window:keydown', ['$event'])
+  @HostListener('document:keydown', ['$event'])
+  onWindowKeyDown(event: KeyboardEvent): void {
+    if (this.isPdfViewerVisible) {
+      const key = event.key?.toLowerCase();
+      const isShortcut =
+        (event.ctrlKey || event.metaKey) &&
+        (key === 'p' ||
+          key === 's' ||
+          event.code === 'KeyP' ||
+          event.code === 'KeyS' ||
+          event.keyCode === 80 ||
+          event.keyCode === 83);
+
+      if (isShortcut) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+      }
+    }
   }
 
   // Dialog & File upload methods

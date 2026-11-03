@@ -649,5 +649,112 @@ describe('DocumentListComponent', () => {
       fixture.detectChanges();
       expect(viewBtn.disabled).toBe(true);
     });
+
+    // PDF Viewer Security Restrictions
+    describe('PDF Viewer Security Restrictions', () => {
+      it('should prevent default on contextmenu event when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+        const event = new MouseEvent('contextmenu', { cancelable: true });
+        const preventSpy = vi.spyOn(event, 'preventDefault');
+
+        window.dispatchEvent(event);
+
+        expect(preventSpy).toHaveBeenCalled();
+      });
+
+      it('should NOT prevent default on contextmenu event when isPdfViewerVisible is false', () => {
+        component.isPdfViewerVisible = false;
+        const event = new MouseEvent('contextmenu', { cancelable: true });
+        const preventSpy = vi.spyOn(event, 'preventDefault');
+
+        window.dispatchEvent(event);
+
+        expect(preventSpy).not.toHaveBeenCalled();
+      });
+
+      it('should prevent default on Ctrl+P and Cmd+P when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+
+        const ctrlPEvent = new KeyboardEvent('keydown', {
+          key: 'p',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlPreventSpy = vi.spyOn(ctrlPEvent, 'preventDefault');
+        window.dispatchEvent(ctrlPEvent);
+        expect(ctrlPreventSpy).toHaveBeenCalled();
+
+        const cmdPEvent = new KeyboardEvent('keydown', {
+          key: 'P',
+          metaKey: true,
+          cancelable: true,
+        });
+        const cmdPreventSpy = vi.spyOn(cmdPEvent, 'preventDefault');
+        window.dispatchEvent(cmdPEvent);
+        expect(cmdPreventSpy).toHaveBeenCalled();
+      });
+
+      it('should prevent default on Ctrl+S and Cmd+S when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+
+        const ctrlSEvent = new KeyboardEvent('keydown', {
+          key: 's',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlPreventSpy = vi.spyOn(ctrlSEvent, 'preventDefault');
+        window.dispatchEvent(ctrlSEvent);
+        expect(ctrlPreventSpy).toHaveBeenCalled();
+
+        const cmdSEvent = new KeyboardEvent('keydown', {
+          key: 'S',
+          metaKey: true,
+          cancelable: true,
+        });
+        const cmdPreventSpy = vi.spyOn(cmdSEvent, 'preventDefault');
+        window.dispatchEvent(cmdSEvent);
+        expect(cmdPreventSpy).toHaveBeenCalled();
+      });
+
+      it('should NOT prevent default on other keyboard events when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+
+        const ctrlCEvent = new KeyboardEvent('keydown', {
+          key: 'c',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlCPreventSpy = vi.spyOn(ctrlCEvent, 'preventDefault');
+        window.dispatchEvent(ctrlCEvent);
+        expect(ctrlCPreventSpy).not.toHaveBeenCalled();
+
+        const plainPEvent = new KeyboardEvent('keydown', { key: 'p', cancelable: true });
+        const plainPPreventSpy = vi.spyOn(plainPEvent, 'preventDefault');
+        window.dispatchEvent(plainPEvent);
+        expect(plainPPreventSpy).not.toHaveBeenCalled();
+      });
+
+      it('should NOT prevent default on Ctrl+P or Ctrl+S when isPdfViewerVisible is false', () => {
+        component.isPdfViewerVisible = false;
+
+        const ctrlPEvent = new KeyboardEvent('keydown', {
+          key: 'p',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlPreventSpy = vi.spyOn(ctrlPEvent, 'preventDefault');
+        window.dispatchEvent(ctrlPEvent);
+        expect(ctrlPreventSpy).not.toHaveBeenCalled();
+
+        const ctrlSEvent = new KeyboardEvent('keydown', {
+          key: 's',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlSPreventSpy = vi.spyOn(ctrlSEvent, 'preventDefault');
+        window.dispatchEvent(ctrlSEvent);
+        expect(ctrlSPreventSpy).not.toHaveBeenCalled();
+      });
+    });
   });
 });
