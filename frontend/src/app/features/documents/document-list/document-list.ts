@@ -118,6 +118,9 @@ export class DocumentListComponent implements OnInit {
   /** ID of the document currently loading its PDF signed URL. */
   loadingPdfId: number | string | null = null;
 
+  /** ID of the document currently being watermarked and downloaded. */
+  downloadingDocId: number | string | null = null;
+
   /** URL of the PDF document currently loaded in the viewer. */
   currentPdfUrl: string | null = null;
 
@@ -428,6 +431,54 @@ export class DocumentListComponent implements OnInit {
         event.stopPropagation();
         event.stopImmediatePropagation?.();
       }
+    }
+  }
+
+  // Document download with watermark
+
+  /**
+   * Intercepts the download action, stamps an indelible "COPIA NO CONTROLADA"
+   * watermark with the current date across all pages via DocumentService,
+   * and triggers the browser download of the watermarked file.
+   *
+   * @param doc - The document to download.
+   */
+  async onDownload(doc: Document): Promise<void> {
+    if (this.downloadingDocId === doc.id || !doc.file_url) {
+      return;
+    }
+
+    this.downloadingDocId = doc.id;
+    this.cdr.markForCheck();
+
+    this.messageService.add({
+      severity: 'info',
+      summary: 'Descarga',
+      detail: 'Preparando documento seguro...',
+      life: 3000,
+    });
+
+    try {
+      await this.documentService.downloadWatermarkedDocument(doc.file_url, doc.code, doc.title);
+
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Éxito',
+        detail: 'Documento descargado con marca de agua.',
+        life: 4000,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Error al generar la descarga del documento.';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error al descargar',
+        detail: this.formatErrorMessage(message),
+        life: 5000,
+      });
+    } finally {
+      this.downloadingDocId = null;
+      this.cdr.markForCheck();
     }
   }
 

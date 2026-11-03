@@ -32,6 +32,9 @@
             ],
             "styles": [
               "src/styles.css"
+            ],
+            "allowedCommonJsDependencies": [
+              "pako"
             ]
           },
           "configurations": {
@@ -39,8 +42,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "3MB",
-                  "maximumError": "4MB"
+                  "maximumWarning": "3.5MB",
+                  "maximumError": "4.5MB"
                 },
                 {
                   "type": "anyComponentStyle",

@@ -160,12 +160,14 @@
                 [id]="'btn-download-' + doc.id"
                 type="button"
                 pButton
-                icon="pi pi-download"
                 class="p-button-secondary p-button-text p-button-rounded p-button-sm"
                 pTooltip="Descargar documento"
-                [disabled]="!doc.file_url"
+                (click)="onDownload(doc)"
+                [disabled]="!doc.file_url || downloadingDocId === doc.id"
               >
-                <i class="pi pi-download"></i>
+                <i
+                  [class]="downloadingDocId === doc.id ? 'pi pi-spin pi-spinner' : 'pi pi-download'"
+                ></i>
               </button>
 
               <!-- View -->

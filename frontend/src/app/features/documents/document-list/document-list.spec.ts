@@ -43,6 +43,7 @@ describe('DocumentListComponent', () => {
     getSignedDocumentUrl: vi
       .fn()
       .mockResolvedValue('https://storage.supabase.com/signed/manual.pdf'),
+    downloadWatermarkedDocument: vi.fn().mockResolvedValue(undefined),
   };
 
   let mockMessageService: MessageService;
@@ -54,6 +55,7 @@ describe('DocumentListComponent', () => {
     mockDocumentService.getSignedDocumentUrl.mockResolvedValue(
       'https://storage.supabase.com/signed/manual.pdf',
     );
+    mockDocumentService.downloadWatermarkedDocument.mockResolvedValue(undefined);
     mockMessageService = new MessageService();
     vi.spyOn(mockMessageService, 'add');
     await TestBed.configureTestingModule({
@@ -754,6 +756,91 @@ describe('DocumentListComponent', () => {
         const ctrlSPreventSpy = vi.spyOn(ctrlSEvent, 'preventDefault');
         window.dispatchEvent(ctrlSEvent);
         expect(ctrlSPreventSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    // Secure Watermarked Download
+    describe('Secure Watermarked Download', () => {
+      it('should call downloadWatermarkedDocument, show info toast and success toast on onDownload', async () => {
+        const doc = mockDocuments[0];
+
+        await component.onDownload(doc);
+
+        expect(mockDocumentService.downloadWatermarkedDocument).toHaveBeenCalledWith(
+          doc.file_url,
+          doc.code,
+          doc.title,
+        );
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'info',
+            summary: 'Descarga',
+            detail: 'Preparando documento seguro...',
+          }),
+        );
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'success',
+            summary: 'Éxito',
+            detail: 'Documento descargado con marca de agua.',
+          }),
+        );
+        expect(component.downloadingDocId).toBeNull();
+      });
+
+      it('should show error toast and reset downloadingDocId when downloadWatermarkedDocument fails', async () => {
+        const doc = mockDocuments[0];
+        mockDocumentService.downloadWatermarkedDocument.mockRejectedValueOnce(
+          new Error('Download failed'),
+        );
+
+        await component.onDownload(doc);
+
+        expect(component.downloadingDocId).toBeNull();
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'error',
+            summary: 'Error al descargar',
+          }),
+        );
+      });
+
+      it('should ignore repeated calls while downloading the same document', async () => {
+        const doc = mockDocuments[0];
+        component.downloadingDocId = doc.id;
+
+        await component.onDownload(doc);
+
+        expect(mockDocumentService.downloadWatermarkedDocument).not.toHaveBeenCalled();
+      });
+
+      it('should ignore call if document has no file_url', async () => {
+        const doc = { ...mockDocuments[0], file_url: '' };
+
+        await component.onDownload(doc);
+
+        expect(mockDocumentService.downloadWatermarkedDocument).not.toHaveBeenCalled();
+      });
+
+      it('should bind the download button in DOM to onDownload and disable it while downloading', () => {
+        component.currentUserRole = 'ADMIN';
+        mockDocumentService.documents.set([...mockDocuments]);
+        fixture.detectChanges();
+
+        const onDownloadSpy = vi.spyOn(component, 'onDownload');
+        const downloadBtn = fixture.nativeElement.querySelector(
+          '#btn-download-' + mockDocuments[0].id,
+        ) as HTMLButtonElement;
+
+        expect(downloadBtn).not.toBeNull();
+        expect(downloadBtn.disabled).toBe(false);
+
+        downloadBtn.click();
+        expect(onDownloadSpy).toHaveBeenCalledWith(mockDocuments[0]);
+
+        component.downloadingDocId = mockDocuments[0].id;
+        fixture.detectChanges();
+        expect(downloadBtn.disabled).toBe(true);
       });
     });
   });

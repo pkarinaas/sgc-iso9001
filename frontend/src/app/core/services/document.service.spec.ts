@@ -1,3 +1,4 @@
+import { PDFDocument } from 'pdf-lib';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { DocumentService } from './document.service';
@@ -228,6 +229,78 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       expect(result).toBeNull();
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('downloadWatermarkedDocument (Secure Download)', () => {
+    it('should throw error if filePath is empty', async () => {
+      await expect(service.downloadWatermarkedDocument('')).rejects.toThrow(
+        'No se proporcionó una ruta de archivo válida.',
+      );
+    });
+
+    it('should throw error if storage download fails', async () => {
+      const downloadMock = vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'Object not found' },
+      });
+      vi.spyOn(supabase.storage, 'from').mockReturnValue({
+        download: downloadMock,
+      } as any);
+
+      await expect(
+        service.downloadWatermarkedDocument('PE-03.pdf', 'PE-03'),
+      ).rejects.toThrow('Error al descargar el archivo');
+    });
+
+    it('should download original PDF, watermark pages, and trigger client-side download with correct filename', async () => {
+      const sampleDoc = await PDFDocument.create();
+      sampleDoc.addPage([595, 842]);
+      const sampleBytes = await sampleDoc.save();
+      const sampleBlob = new Blob([sampleBytes as unknown as BlobPart], { type: 'application/pdf' });
+
+      const downloadMock = vi.fn().mockResolvedValue({
+        data: sampleBlob,
+        error: null,
+      });
+      vi.spyOn(supabase.storage, 'from').mockReturnValue({
+        download: downloadMock,
+      } as any);
+
+      const createObjectURLSpy = vi
+        .spyOn(URL, 'createObjectURL')
+        .mockReturnValue('blob:http://localhost/mock-blob-url');
+      const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+      let createdAnchor: HTMLAnchorElement | null = null;
+      const originalCreateElement = document.createElement.bind(document);
+      const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+        const el = originalCreateElement(tagName);
+        if (tagName === 'a') {
+          createdAnchor = el as HTMLAnchorElement;
+          vi.spyOn(createdAnchor, 'click').mockImplementation(() => {});
+        }
+        return el;
+      });
+
+      await service.downloadWatermarkedDocument(
+        'https://supabase.co/storage/v1/object/public/sgc-files/PE-03_Title_v00.pdf',
+        'PE-03',
+        'Control Calidad',
+      );
+
+      expect(supabase.storage.from).toHaveBeenCalledWith('sgc-files');
+      expect(downloadMock).toHaveBeenCalledWith('PE-03_Title_v00.pdf');
+      expect(createObjectURLSpy).toHaveBeenCalled();
+      expect(createdAnchor).not.toBeNull();
+      const anchor = createdAnchor as unknown as HTMLAnchorElement;
+      expect(anchor.download).toBe('PE-03_Control_Calidad_COPIA_NO_CONTROLADA.pdf');
+      expect(anchor.href).toBe('blob:http://localhost/mock-blob-url');
+      expect(anchor.click).toHaveBeenCalled();
+
+      createElementSpy.mockRestore();
+      createObjectURLSpy.mockRestore();
+      revokeObjectURLSpy.mockRestore();
     });
   });
 });
