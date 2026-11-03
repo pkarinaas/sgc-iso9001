@@ -16,6 +16,7 @@ import { PrimeNG } from 'primeng/config';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { Tooltip } from 'primeng/tooltip';
+import { NgxExtendedPdfViewerModule } from 'ngx-extended-pdf-viewer';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document, DocumentStatus } from '../../../core/models/document.model';
@@ -56,6 +57,7 @@ interface DateRangeFilter {
     ConfirmDialog,
     Tooltip,
     SharedModule,
+    NgxExtendedPdfViewerModule,
   ],
   providers: [MessageService, ConfirmationService],
 })
@@ -87,6 +89,14 @@ export class DocumentListComponent implements OnInit {
 
   /** True while the upload/save operation is in-flight. */
   isSubmitting = false;
+
+  // PDF viewer modal state
+
+  /** Controls the visibility of the PDF viewer dialog modal. */
+  isPdfViewerVisible = false;
+
+  /** URL of the PDF document currently loaded in the viewer. */
+  currentPdfUrl: string | null = null;
 
   // Status change modal state
 
@@ -283,6 +293,26 @@ export class DocumentListComponent implements OnInit {
     return typeof version === 'number' && !Number.isInteger(version)
       ? `v${version.toFixed(1)}`
       : `v${String(version).padStart(2, '0')}`;
+  }
+
+  // PDF viewer modal methods
+
+  /**
+   * Opens the PDF viewer dialog modal for the given document.
+   *
+   * @param doc - The document whose PDF is to be viewed.
+   */
+  openPdfViewer(doc: Document): void {
+    this.currentPdfUrl = doc.file_url ?? null;
+    this.isPdfViewerVisible = true;
+  }
+
+  /**
+   * Closes the PDF viewer dialog modal and resets the URL.
+   */
+  closePdfViewer(): void {
+    this.isPdfViewerVisible = false;
+    this.currentPdfUrl = null;
   }
 
   // Dialog & File upload methods

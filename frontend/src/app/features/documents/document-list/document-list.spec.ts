@@ -46,6 +46,8 @@ describe('DocumentListComponent', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockDocumentService.documents.set([...mockDocuments]);
+    mockAuthService.getUserRole.mockResolvedValue('ADMIN');
     mockMessageService = new MessageService();
     vi.spyOn(mockMessageService, 'add');
     await TestBed.configureTestingModule({
@@ -536,6 +538,41 @@ describe('DocumentListComponent', () => {
       expect(uploadBtn).toBeNull();
       expect(statusBtn).toBeNull();
       expect(deleteBtn).toBeNull();
+    });
+  });
+
+  // PDF Viewer Integration
+  describe('PDF Viewer Integration (SCRUM-53)', () => {
+    it('should open PDF viewer dialog and set currentPdfUrl when openPdfViewer is called', () => {
+      const doc = mockDocuments[0];
+      component.openPdfViewer(doc);
+
+      expect(component.isPdfViewerVisible).toBe(true);
+      expect(component.currentPdfUrl).toBe(doc.file_url);
+    });
+
+    it('should close PDF viewer dialog and reset currentPdfUrl when closePdfViewer is called', () => {
+      component.isPdfViewerVisible = true;
+      component.currentPdfUrl = 'https://example.com/test.pdf';
+
+      component.closePdfViewer();
+
+      expect(component.isPdfViewerVisible).toBe(false);
+      expect(component.currentPdfUrl).toBeNull();
+    });
+
+    it('should bind the view button to openPdfViewer with document file_url', () => {
+      component.currentUserRole = 'ADMIN';
+      mockDocumentService.documents.set([...mockDocuments]);
+      fixture.detectChanges();
+
+      const openSpy = vi.spyOn(component, 'openPdfViewer');
+      const viewBtn = fixture.nativeElement.querySelector('#btn-view-' + mockDocuments[0].id);
+
+      expect(viewBtn).not.toBeNull();
+      viewBtn.click();
+
+      expect(openSpy).toHaveBeenCalledWith(mockDocuments[0]);
     });
   });
 });

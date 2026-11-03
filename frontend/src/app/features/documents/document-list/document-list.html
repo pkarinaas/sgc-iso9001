@@ -176,6 +176,8 @@
                 icon="pi pi-eye"
                 class="p-button-info p-button-text p-button-rounded p-button-sm"
                 pTooltip="Ver documento"
+                (click)="openPdfViewer(doc)"
+                [disabled]="!doc.file_url"
               >
                 <i class="pi pi-eye"></i>
               </button>
@@ -392,4 +394,30 @@
       </button>
     </div>
   </ng-template>
+</p-dialog>
+
+<!-- PDF Viewer Dialog Modal -->
+<p-dialog
+  [(visible)]="isPdfViewerVisible"
+  [modal]="true"
+  [maximizable]="true"
+  [style]="{ width: '90vw' }"
+  header="Visor de Documentos"
+  [closable]="true"
+  (onHide)="closePdfViewer()"
+>
+  @if (currentPdfUrl) {
+    <ngx-extended-pdf-viewer
+      [src]="currentPdfUrl"
+      [textLayer]="true"
+      [showHandToolButton]="true"
+      [showPrintButton]="false"
+      [showDownloadButton]="false"
+      [showOpenFileButton]="false"
+      [showSecondaryToolbarButton]="false"
+      [showEditorButtons]="false"
+      [enablePrint]="false"
+      [height]="'80vh'"
+    ></ngx-extended-pdf-viewer>
+  }
 </p-dialog>
