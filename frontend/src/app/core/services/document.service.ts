@@ -199,6 +199,66 @@ export class DocumentService {
     this._loading.set(false);
   }
 
+  // Storage & file access methods
+
+  /**
+   * Extracts the relative file path inside the 'sgc-files' storage bucket from a given
+   * full Supabase storage URL or relative path string.
+   *
+   * @param fileUrlOrPath - The complete URL or relative path to the stored document.
+   * @returns The relative storage path suitable for Supabase Storage API calls.
+   */
+  extractFilePath(fileUrlOrPath: string): string {
+    if (!fileUrlOrPath) {
+      return '';
+    }
+    if (!fileUrlOrPath.startsWith('http://') && !fileUrlOrPath.startsWith('https://')) {
+      return fileUrlOrPath;
+    }
+    const bucketMarker = '/sgc-files/';
+    const index = fileUrlOrPath.indexOf(bucketMarker);
+    if (index !== -1) {
+      const extracted = fileUrlOrPath.substring(index + bucketMarker.length);
+      return decodeURIComponent(extracted.split('?')[0]);
+    }
+    const segments = fileUrlOrPath.split('?')[0].split('/');
+    return decodeURIComponent(segments[segments.length - 1] || '');
+  }
+
+  /**
+   * Generates a temporary signed URL (valid for 60 seconds) for securely viewing
+   * a PDF document stored in the 'sgc-files' Supabase storage bucket.
+   *
+   * @param filePath - The full URL or relative file path of the document.
+   * @returns The signed URL string, or null if the generation fails.
+   */
+  async getSignedDocumentUrl(filePath: string): Promise<string | null> {
+    if (!filePath) {
+      return null;
+    }
+
+    const relativePath = this.extractFilePath(filePath);
+    if (!relativePath) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('sgc-files')
+        .createSignedUrl(relativePath, 60);
+
+      if (error || !data?.signedUrl) {
+        console.error('Error creating signed URL for document:', error?.message);
+        return null;
+      }
+
+      return data.signedUrl;
+    } catch (err) {
+      console.error('Unexpected error generating signed URL:', err);
+      return null;
+    }
+  }
+
   // Error translation helpers
 
   /**

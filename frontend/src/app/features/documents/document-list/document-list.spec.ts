@@ -40,6 +40,9 @@ describe('DocumentListComponent', () => {
     deleteDocument: vi.fn().mockResolvedValue(undefined),
     updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
     getNextVersionForCode: vi.fn().mockResolvedValue(1),
+    getSignedDocumentUrl: vi
+      .fn()
+      .mockResolvedValue('https://storage.supabase.com/signed/manual.pdf'),
   };
 
   let mockMessageService: MessageService;
@@ -48,6 +51,9 @@ describe('DocumentListComponent', () => {
     vi.clearAllMocks();
     mockDocumentService.documents.set([...mockDocuments]);
     mockAuthService.getUserRole.mockResolvedValue('ADMIN');
+    mockDocumentService.getSignedDocumentUrl.mockResolvedValue(
+      'https://storage.supabase.com/signed/manual.pdf',
+    );
     mockMessageService = new MessageService();
     vi.spyOn(mockMessageService, 'add');
     await TestBed.configureTestingModule({
@@ -541,14 +547,76 @@ describe('DocumentListComponent', () => {
     });
   });
 
-  // PDF Viewer Integration
-  describe('PDF Viewer Integration (SCRUM-53)', () => {
-    it('should open PDF viewer dialog and set currentPdfUrl when openPdfViewer is called', () => {
+  // PDF Viewer Integration & Secure Signed URLs
+  describe('PDF Viewer Integration & Secure Access', () => {
+    it('should fetch signed URL, set currentPdfUrl to signed URL, and open dialog when openPdfViewer is called', async () => {
       const doc = mockDocuments[0];
-      component.openPdfViewer(doc);
+      mockDocumentService.getSignedDocumentUrl.mockResolvedValueOnce(
+        'https://signed-url.com/manual.pdf',
+      );
 
+      await component.openPdfViewer(doc);
+
+      expect(mockDocumentService.getSignedDocumentUrl).toHaveBeenCalledWith(doc.file_url);
+      expect(component.currentPdfUrl).toBe('https://signed-url.com/manual.pdf');
       expect(component.isPdfViewerVisible).toBe(true);
-      expect(component.currentPdfUrl).toBe(doc.file_url);
+      expect(component.isLoadingPdf).toBe(false);
+    });
+
+    it('should display error toast and not open dialog when getSignedDocumentUrl returns null', async () => {
+      const doc = mockDocuments[0];
+      mockDocumentService.getSignedDocumentUrl.mockResolvedValueOnce(null);
+
+      await component.openPdfViewer(doc);
+
+      expect(mockDocumentService.getSignedDocumentUrl).toHaveBeenCalledWith(doc.file_url);
+      expect(component.isPdfViewerVisible).toBe(false);
+      expect(component.currentPdfUrl).toBeNull();
+      expect(component.isLoadingPdf).toBe(false);
+      expect(mockMessageService.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Error al cargar el documento seguro',
+          life: 5000,
+        }),
+      );
+    });
+
+    it('should display error toast and reset isLoadingPdf when getSignedDocumentUrl throws', async () => {
+      const doc = mockDocuments[0];
+      mockDocumentService.getSignedDocumentUrl.mockRejectedValueOnce(new Error('Network failure'));
+
+      await component.openPdfViewer(doc);
+
+      expect(component.isPdfViewerVisible).toBe(false);
+      expect(component.isLoadingPdf).toBe(false);
+      expect(mockMessageService.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Error al cargar el documento seguro',
+          life: 5000,
+        }),
+      );
+    });
+
+    it('should ignore duplicate calls while isLoadingPdf is true', async () => {
+      const doc = mockDocuments[0];
+      component.isLoadingPdf = true;
+
+      await component.openPdfViewer(doc);
+
+      expect(mockDocumentService.getSignedDocumentUrl).not.toHaveBeenCalled();
+    });
+
+    it('should not attempt to fetch signed URL if document has no file_url', async () => {
+      const docWithoutUrl = { ...mockDocuments[0], file_url: '' };
+
+      await component.openPdfViewer(docWithoutUrl);
+
+      expect(mockDocumentService.getSignedDocumentUrl).not.toHaveBeenCalled();
+      expect(component.isPdfViewerVisible).toBe(false);
     });
 
     it('should close PDF viewer dialog and reset currentPdfUrl when closePdfViewer is called', () => {
@@ -561,18 +629,25 @@ describe('DocumentListComponent', () => {
       expect(component.currentPdfUrl).toBeNull();
     });
 
-    it('should bind the view button to openPdfViewer with document file_url', () => {
+    it('should bind the view button to openPdfViewer with document and disable it when isLoadingPdf is true', () => {
       component.currentUserRole = 'ADMIN';
       mockDocumentService.documents.set([...mockDocuments]);
       fixture.detectChanges();
 
       const openSpy = vi.spyOn(component, 'openPdfViewer');
-      const viewBtn = fixture.nativeElement.querySelector('#btn-view-' + mockDocuments[0].id);
+      const viewBtn = fixture.nativeElement.querySelector(
+        '#btn-view-' + mockDocuments[0].id,
+      ) as HTMLButtonElement;
 
       expect(viewBtn).not.toBeNull();
-      viewBtn.click();
+      expect(viewBtn.disabled).toBe(false);
 
+      viewBtn.click();
       expect(openSpy).toHaveBeenCalledWith(mockDocuments[0]);
+
+      component.isLoadingPdf = true;
+      fixture.detectChanges();
+      expect(viewBtn.disabled).toBe(true);
     });
   });
 });

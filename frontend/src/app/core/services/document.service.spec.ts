@@ -146,4 +146,88 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       });
     });
   });
+
+  describe('extractFilePath (SCRUM-54)', () => {
+    it('should return empty string if input is empty or null', () => {
+      expect(service.extractFilePath('')).toBe('');
+      expect(service.extractFilePath(null as any)).toBe('');
+      expect(service.extractFilePath(undefined as any)).toBe('');
+    });
+
+    it('should return the relative path as-is if not an HTTP/HTTPS URL', () => {
+      expect(service.extractFilePath('PE-03_Title_v00.pdf')).toBe('PE-03_Title_v00.pdf');
+      expect(service.extractFilePath('subfolder/document.pdf')).toBe('subfolder/document.pdf');
+    });
+
+    it('should extract filename from full Supabase URL containing /sgc-files/', () => {
+      const fullUrl = 'https://proj.supabase.co/storage/v1/object/public/sgc-files/PE-03_Title_v00.pdf';
+      expect(service.extractFilePath(fullUrl)).toBe('PE-03_Title_v00.pdf');
+    });
+
+    it('should extract nested path from full Supabase URL containing /sgc-files/', () => {
+      const fullUrl = 'https://proj.supabase.co/storage/v1/object/public/sgc-files/reports/2026/doc_v01.pdf';
+      expect(service.extractFilePath(fullUrl)).toBe('reports/2026/doc_v01.pdf');
+    });
+
+    it('should strip query parameters and decode URL encoded characters', () => {
+      const fullUrl = 'https://proj.supabase.co/storage/v1/object/public/sgc-files/PE-03%20Manual%20Calidad_v00.pdf?token=secret123';
+      expect(service.extractFilePath(fullUrl)).toBe('PE-03 Manual Calidad_v00.pdf');
+    });
+  });
+
+  describe('getSignedDocumentUrl (SCRUM-54)', () => {
+    it('should return null if filePath is empty', async () => {
+      const storageSpy = vi.spyOn(supabase.storage, 'from');
+      const result = await service.getSignedDocumentUrl('');
+
+      expect(result).toBeNull();
+      expect(storageSpy).not.toHaveBeenCalled();
+    });
+
+    it('should call createSignedUrl with bucket sgc-files and 60 seconds expiration', async () => {
+      const createSignedUrlMock = vi.fn().mockResolvedValue({
+        data: { signedUrl: 'https://proj.supabase.co/storage/v1/object/sign/sgc-files/doc.pdf?token=xyz' },
+        error: null,
+      });
+      vi.spyOn(supabase.storage, 'from').mockReturnValue({
+        createSignedUrl: createSignedUrlMock,
+      } as any);
+
+      const result = await service.getSignedDocumentUrl('https://proj.supabase.co/storage/v1/object/public/sgc-files/doc.pdf');
+
+      expect(supabase.storage.from).toHaveBeenCalledWith('sgc-files');
+      expect(createSignedUrlMock).toHaveBeenCalledWith('doc.pdf', 60);
+      expect(result).toBe('https://proj.supabase.co/storage/v1/object/sign/sgc-files/doc.pdf?token=xyz');
+    });
+
+    it('should handle Supabase storage error gracefully and return null', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const createSignedUrlMock = vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'Object not found' },
+      });
+      vi.spyOn(supabase.storage, 'from').mockReturnValue({
+        createSignedUrl: createSignedUrlMock,
+      } as any);
+
+      const result = await service.getSignedDocumentUrl('missing-file.pdf');
+
+      expect(result).toBeNull();
+      expect(consoleSpy).toHaveBeenCalledWith('Error creating signed URL for document:', 'Object not found');
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle unexpected exception gracefully and return null', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(supabase.storage, 'from').mockImplementation(() => {
+        throw new Error('Network failure');
+      });
+
+      const result = await service.getSignedDocumentUrl('doc.pdf');
+
+      expect(result).toBeNull();
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
 });

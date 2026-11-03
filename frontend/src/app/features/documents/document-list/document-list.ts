@@ -1,6 +1,13 @@
-import { Component, computed, inject, OnInit, signal, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, computed, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import {
+  FormsModule,
+  ReactiveFormsModule,
+  FormBuilder,
+  Validators,
+  AbstractControl,
+  ValidationErrors,
+} from '@angular/forms';
 import { MessageService, FilterService, ConfirmationService, SharedModule } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
@@ -72,6 +79,7 @@ export class DocumentListComponent implements OnInit {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly fb = inject(FormBuilder);
   private readonly primeNG = inject(PrimeNG);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   /** Reference to the p-table instance for programmatic filter resets. */
   @ViewChild('dt') documentsTable!: Table;
@@ -95,6 +103,12 @@ export class DocumentListComponent implements OnInit {
   /** Controls the visibility of the PDF viewer dialog modal. */
   isPdfViewerVisible = false;
 
+  /** True while the temporary signed URL is being generated. */
+  isLoadingPdf = false;
+
+  /** ID of the document currently loading its PDF signed URL. */
+  loadingPdfId: number | string | null = null;
+
   /** URL of the PDF document currently loaded in the viewer. */
   currentPdfUrl: string | null = null;
 
@@ -116,19 +130,16 @@ export class DocumentListComponent implements OnInit {
   isUpdatingStatus = false;
 
   /** Allowed status transitions according to ISO 9001 workflow. */
-  readonly allowedTransitions: Record<DocumentStatus, { label: string; value: DocumentStatus }[]> = {
-    DRAFT: [
-      { label: 'Revisado', value: 'REVIEWED' },
-    ],
-    REVIEWED: [
-      { label: 'Aprobado', value: 'APPROVED' },
-      { label: 'Borrador', value: 'DRAFT' },
-    ],
-    APPROVED: [
-      { label: 'Obsoleto', value: 'OBSOLETE' },
-    ],
-    OBSOLETE: [],
-  };
+  readonly allowedTransitions: Record<DocumentStatus, { label: string; value: DocumentStatus }[]> =
+    {
+      DRAFT: [{ label: 'Revisado', value: 'REVIEWED' }],
+      REVIEWED: [
+        { label: 'Aprobado', value: 'APPROVED' },
+        { label: 'Borrador', value: 'DRAFT' },
+      ],
+      APPROVED: [{ label: 'Obsoleto', value: 'OBSOLETE' }],
+      OBSOLETE: [],
+    };
 
   // Form constants
 
@@ -298,13 +309,52 @@ export class DocumentListComponent implements OnInit {
   // PDF viewer modal methods
 
   /**
-   * Opens the PDF viewer dialog modal for the given document.
+   * Opens the PDF viewer dialog modal for the given document by retrieving
+   * a temporary signed URL from Supabase storage.
    *
    * @param doc - The document whose PDF is to be viewed.
    */
-  openPdfViewer(doc: Document): void {
-    this.currentPdfUrl = doc.file_url ?? null;
-    this.isPdfViewerVisible = true;
+  async openPdfViewer(doc: Document): Promise<void> {
+    if (this.isLoadingPdf || !doc.file_url) {
+      return;
+    }
+
+    this.isLoadingPdf = true;
+    this.loadingPdfId = doc.id;
+    this.cdr.markForCheck();
+
+    try {
+      const signedUrl = await this.documentService.getSignedDocumentUrl(doc.file_url);
+
+      if (!signedUrl) {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Error al cargar el documento seguro',
+          life: 5000,
+        });
+        return;
+      }
+
+      // Close other modals defensively so only the PDF viewer is displayed
+      this.isStatusModalVisible = false;
+      this.isDialogVisible = false;
+
+      this.currentPdfUrl = signedUrl;
+      this.isPdfViewerVisible = true;
+      this.cdr.detectChanges();
+    } catch {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Error al cargar el documento seguro',
+        life: 5000,
+      });
+    } finally {
+      this.isLoadingPdf = false;
+      this.loadingPdfId = null;
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -313,6 +363,7 @@ export class DocumentListComponent implements OnInit {
   closePdfViewer(): void {
     this.isPdfViewerVisible = false;
     this.currentPdfUrl = null;
+    this.cdr.markForCheck();
   }
 
   // Dialog & File upload methods
@@ -410,10 +461,13 @@ export class DocumentListComponent implements OnInit {
    * @param doc - The document whose status is to be modified.
    */
   openStatusModal(doc: Document): void {
+    // Ensure PDF viewer modal is not concurrently visible
+    this.isPdfViewerVisible = false;
     this.documentToChange = doc;
     this.availableStates = this.allowedTransitions[doc.status] ?? [];
     this.selectedNewStatus = this.availableStates.length > 0 ? this.availableStates[0].value : null;
     this.isStatusModalVisible = true;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -565,7 +619,8 @@ export class DocumentListComponent implements OnInit {
           });
           await this.documentService.loadDocuments();
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Error al eliminar el documento.';
+          const message =
+            error instanceof Error ? error.message : 'Error al eliminar el documento.';
           this.messageService.add({
             severity: 'error',
             summary: 'Error',
@@ -582,7 +637,10 @@ export class DocumentListComponent implements OnInit {
    */
   private formatErrorMessage(message: string): string {
     const lower = message.toLowerCase();
-    if (lower.includes('row-level security') || lower.includes('violates row-level security policy')) {
+    if (
+      lower.includes('row-level security') ||
+      lower.includes('violates row-level security policy')
+    ) {
       return 'No tienes permisos suficientes para realizar esta acción (política de seguridad).';
     }
     if (lower.includes('failed to fetch') || lower.includes('network')) {
