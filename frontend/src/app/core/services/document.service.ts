@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { supabase } from '../supabase/supabase.client';
 import type { Document, DocumentStatus } from '../models/document.model';
+import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 
 /**
  * DocumentService manages the reactive state for the Document Repository feature.
@@ -51,10 +52,7 @@ export class DocumentService {
    * @throws Error with message if DB update fails.
    */
   async updateDocumentStatus(id: number | string, status: DocumentStatus): Promise<void> {
-    const { error } = await supabase
-      .from('documents')
-      .update({ status })
-      .eq('id', id);
+    const { error } = await supabase.from('documents').update({ status }).eq('id', id);
 
     if (error) {
       throw new Error(
@@ -62,7 +60,6 @@ export class DocumentService {
       );
     }
   }
-
 
   /**
    * Uploads a PDF file to Supabase Storage (`sgc-files` bucket) and inserts a
@@ -197,6 +194,148 @@ export class DocumentService {
     }
 
     this._loading.set(false);
+  }
+
+  // Storage & file access methods
+
+  /**
+   * Extracts the relative file path inside the 'sgc-files' storage bucket from a given
+   * full Supabase storage URL or relative path string.
+   *
+   * @param fileUrlOrPath - The complete URL or relative path to the stored document.
+   * @returns The relative storage path suitable for Supabase Storage API calls.
+   */
+  extractFilePath(fileUrlOrPath: string): string {
+    if (!fileUrlOrPath) {
+      return '';
+    }
+    if (!fileUrlOrPath.startsWith('http://') && !fileUrlOrPath.startsWith('https://')) {
+      return fileUrlOrPath;
+    }
+    const bucketMarker = '/sgc-files/';
+    const index = fileUrlOrPath.indexOf(bucketMarker);
+    if (index !== -1) {
+      const extracted = fileUrlOrPath.substring(index + bucketMarker.length);
+      return decodeURIComponent(extracted.split('?')[0]);
+    }
+    const segments = fileUrlOrPath.split('?')[0].split('/');
+    return decodeURIComponent(segments[segments.length - 1] || '');
+  }
+
+  /**
+   * Generates a temporary signed URL (valid for 60 seconds) for securely viewing
+   * a PDF document stored in the 'sgc-files' Supabase storage bucket.
+   *
+   * @param filePath - The full URL or relative file path of the document.
+   * @returns The signed URL string, or null if the generation fails.
+   */
+  async getSignedDocumentUrl(filePath: string): Promise<string | null> {
+    if (!filePath) {
+      return null;
+    }
+
+    const relativePath = this.extractFilePath(filePath);
+    if (!relativePath) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('sgc-files')
+        .createSignedUrl(relativePath, 60);
+
+      if (error || !data?.signedUrl) {
+        console.error('Error creating signed URL for document:', error?.message);
+        return null;
+      }
+
+      return data.signedUrl;
+    } catch (err) {
+      console.error('Unexpected error generating signed URL:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Downloads a document from Supabase Storage, applies an indelible watermark
+   * ("COPIA NO CONTROLADA - [Date]") across all pages using pdf-lib, and triggers
+   * a client-side browser download without modifying the original stored file.
+   *
+   * @param filePath - The full URL or relative file path of the document in storage.
+   * @param documentCode - The document code (e.g. 'PE-03') used to name the downloaded file.
+   * @param documentTitle - The document title (e.g. 'Control Calidad') used to name the downloaded file.
+   */
+  async downloadWatermarkedDocument(
+    filePath: string,
+    documentCode?: string,
+    documentTitle?: string,
+  ): Promise<void> {
+    if (!filePath) {
+      throw new Error('No se proporcionó una ruta de archivo válida.');
+    }
+
+    const relativePath = this.extractFilePath(filePath);
+    if (!relativePath) {
+      throw new Error('No se pudo determinar la ubicación del archivo en el repositorio.');
+    }
+
+    // Fetch the file from Supabase Storage
+    const { data: blobData, error: downloadError } = await supabase.storage
+      .from('sgc-files')
+      .download(relativePath);
+
+    if (downloadError || !blobData) {
+      throw new Error(
+        `Error al descargar el archivo: ${this.translateStorageError(downloadError?.message ?? '')}`,
+      );
+    }
+
+    // Convert the downloaded Blob to an ArrayBuffer
+    const arrayBuffer = await blobData.arrayBuffer();
+
+    // Load the PDF with pdf-lib
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+
+    // Iterate through all pages and apply diagonal watermark
+    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const pages = pdfDoc.getPages();
+    const formattedDate = new Date().toLocaleDateString('es-AR');
+    const watermarkText = `COPIA NO CONTROLADA - ${formattedDate}`;
+
+    for (const page of pages) {
+      const { width, height } = page.getSize();
+      page.drawText(watermarkText, {
+        font,
+        x: width / 2 - 240,
+        y: height / 2 - 180,
+        size: 36,
+        color: rgb(0.85, 0.25, 0.25),
+        opacity: 0.15,
+        rotate: degrees(35),
+      });
+    }
+
+    // Save the modified document
+    const pdfBytes = await pdfDoc.save();
+
+    // Trigger browser download using a temporary <a> tag
+    const watermarkedBlob = new Blob([pdfBytes as unknown as BlobPart], {
+      type: 'application/pdf',
+    });
+    const blobUrl = URL.createObjectURL(watermarkedBlob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+
+    const baseCode = (documentCode || 'DOCUMENTO').trim().replace(/[\/\\]/g, '_');
+    const safeTitle = (documentTitle || 'UNTITLED').trim().replace(/[^a-zA-Z0-9]/g, '_');
+
+    link.download = `${baseCode}_${safeTitle}_COPIA_NO_CONTROLADA.pdf`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   }
 
   // Error translation helpers

@@ -40,12 +40,22 @@ describe('DocumentListComponent', () => {
     deleteDocument: vi.fn().mockResolvedValue(undefined),
     updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
     getNextVersionForCode: vi.fn().mockResolvedValue(1),
+    getSignedDocumentUrl: vi
+      .fn()
+      .mockResolvedValue('https://storage.supabase.com/signed/manual.pdf'),
+    downloadWatermarkedDocument: vi.fn().mockResolvedValue(undefined),
   };
 
   let mockMessageService: MessageService;
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockDocumentService.documents.set([...mockDocuments]);
+    mockAuthService.getUserRole.mockResolvedValue('ADMIN');
+    mockDocumentService.getSignedDocumentUrl.mockResolvedValue(
+      'https://storage.supabase.com/signed/manual.pdf',
+    );
+    mockDocumentService.downloadWatermarkedDocument.mockResolvedValue(undefined);
     mockMessageService = new MessageService();
     vi.spyOn(mockMessageService, 'add');
     await TestBed.configureTestingModule({
@@ -536,6 +546,302 @@ describe('DocumentListComponent', () => {
       expect(uploadBtn).toBeNull();
       expect(statusBtn).toBeNull();
       expect(deleteBtn).toBeNull();
+    });
+  });
+
+  // PDF Viewer Integration & Secure Signed URLs
+  describe('PDF Viewer Integration & Secure Access', () => {
+    it('should fetch signed URL, set currentPdfUrl to signed URL, and open dialog when openPdfViewer is called', async () => {
+      const doc = mockDocuments[0];
+      mockDocumentService.getSignedDocumentUrl.mockResolvedValueOnce(
+        'https://signed-url.com/manual.pdf',
+      );
+
+      await component.openPdfViewer(doc);
+
+      expect(mockDocumentService.getSignedDocumentUrl).toHaveBeenCalledWith(doc.file_url);
+      expect(component.currentPdfUrl).toBe('https://signed-url.com/manual.pdf');
+      expect(component.isPdfViewerVisible).toBe(true);
+      expect(component.isLoadingPdf).toBe(false);
+    });
+
+    it('should display error toast and not open dialog when getSignedDocumentUrl returns null', async () => {
+      const doc = mockDocuments[0];
+      mockDocumentService.getSignedDocumentUrl.mockResolvedValueOnce(null);
+
+      await component.openPdfViewer(doc);
+
+      expect(mockDocumentService.getSignedDocumentUrl).toHaveBeenCalledWith(doc.file_url);
+      expect(component.isPdfViewerVisible).toBe(false);
+      expect(component.currentPdfUrl).toBeNull();
+      expect(component.isLoadingPdf).toBe(false);
+      expect(mockMessageService.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Error al cargar el documento seguro',
+          life: 5000,
+        }),
+      );
+    });
+
+    it('should display error toast and reset isLoadingPdf when getSignedDocumentUrl throws', async () => {
+      const doc = mockDocuments[0];
+      mockDocumentService.getSignedDocumentUrl.mockRejectedValueOnce(new Error('Network failure'));
+
+      await component.openPdfViewer(doc);
+
+      expect(component.isPdfViewerVisible).toBe(false);
+      expect(component.isLoadingPdf).toBe(false);
+      expect(mockMessageService.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Error al cargar el documento seguro',
+          life: 5000,
+        }),
+      );
+    });
+
+    it('should ignore duplicate calls while isLoadingPdf is true', async () => {
+      const doc = mockDocuments[0];
+      component.isLoadingPdf = true;
+
+      await component.openPdfViewer(doc);
+
+      expect(mockDocumentService.getSignedDocumentUrl).not.toHaveBeenCalled();
+    });
+
+    it('should not attempt to fetch signed URL if document has no file_url', async () => {
+      const docWithoutUrl = { ...mockDocuments[0], file_url: '' };
+
+      await component.openPdfViewer(docWithoutUrl);
+
+      expect(mockDocumentService.getSignedDocumentUrl).not.toHaveBeenCalled();
+      expect(component.isPdfViewerVisible).toBe(false);
+    });
+
+    it('should close PDF viewer dialog and reset currentPdfUrl when closePdfViewer is called', () => {
+      component.isPdfViewerVisible = true;
+      component.currentPdfUrl = 'https://example.com/test.pdf';
+
+      component.closePdfViewer();
+
+      expect(component.isPdfViewerVisible).toBe(false);
+      expect(component.currentPdfUrl).toBeNull();
+    });
+
+    it('should bind the view button to openPdfViewer with document and disable it when isLoadingPdf is true', () => {
+      component.currentUserRole = 'ADMIN';
+      mockDocumentService.documents.set([...mockDocuments]);
+      fixture.detectChanges();
+
+      const openSpy = vi.spyOn(component, 'openPdfViewer');
+      const viewBtn = fixture.nativeElement.querySelector(
+        '#btn-view-' + mockDocuments[0].id,
+      ) as HTMLButtonElement;
+
+      expect(viewBtn).not.toBeNull();
+      expect(viewBtn.disabled).toBe(false);
+
+      viewBtn.click();
+      expect(openSpy).toHaveBeenCalledWith(mockDocuments[0]);
+
+      component.isLoadingPdf = true;
+      fixture.detectChanges();
+      expect(viewBtn.disabled).toBe(true);
+    });
+
+    // PDF Viewer Security Restrictions
+    describe('PDF Viewer Security Restrictions', () => {
+      it('should prevent default on contextmenu event when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+        const event = new MouseEvent('contextmenu', { cancelable: true });
+        const preventSpy = vi.spyOn(event, 'preventDefault');
+
+        window.dispatchEvent(event);
+
+        expect(preventSpy).toHaveBeenCalled();
+      });
+
+      it('should NOT prevent default on contextmenu event when isPdfViewerVisible is false', () => {
+        component.isPdfViewerVisible = false;
+        const event = new MouseEvent('contextmenu', { cancelable: true });
+        const preventSpy = vi.spyOn(event, 'preventDefault');
+
+        window.dispatchEvent(event);
+
+        expect(preventSpy).not.toHaveBeenCalled();
+      });
+
+      it('should prevent default on Ctrl+P and Cmd+P when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+
+        const ctrlPEvent = new KeyboardEvent('keydown', {
+          key: 'p',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlPreventSpy = vi.spyOn(ctrlPEvent, 'preventDefault');
+        window.dispatchEvent(ctrlPEvent);
+        expect(ctrlPreventSpy).toHaveBeenCalled();
+
+        const cmdPEvent = new KeyboardEvent('keydown', {
+          key: 'P',
+          metaKey: true,
+          cancelable: true,
+        });
+        const cmdPreventSpy = vi.spyOn(cmdPEvent, 'preventDefault');
+        window.dispatchEvent(cmdPEvent);
+        expect(cmdPreventSpy).toHaveBeenCalled();
+      });
+
+      it('should prevent default on Ctrl+S and Cmd+S when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+
+        const ctrlSEvent = new KeyboardEvent('keydown', {
+          key: 's',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlPreventSpy = vi.spyOn(ctrlSEvent, 'preventDefault');
+        window.dispatchEvent(ctrlSEvent);
+        expect(ctrlPreventSpy).toHaveBeenCalled();
+
+        const cmdSEvent = new KeyboardEvent('keydown', {
+          key: 'S',
+          metaKey: true,
+          cancelable: true,
+        });
+        const cmdPreventSpy = vi.spyOn(cmdSEvent, 'preventDefault');
+        window.dispatchEvent(cmdSEvent);
+        expect(cmdPreventSpy).toHaveBeenCalled();
+      });
+
+      it('should NOT prevent default on other keyboard events when isPdfViewerVisible is true', () => {
+        component.isPdfViewerVisible = true;
+
+        const ctrlCEvent = new KeyboardEvent('keydown', {
+          key: 'c',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlCPreventSpy = vi.spyOn(ctrlCEvent, 'preventDefault');
+        window.dispatchEvent(ctrlCEvent);
+        expect(ctrlCPreventSpy).not.toHaveBeenCalled();
+
+        const plainPEvent = new KeyboardEvent('keydown', { key: 'p', cancelable: true });
+        const plainPPreventSpy = vi.spyOn(plainPEvent, 'preventDefault');
+        window.dispatchEvent(plainPEvent);
+        expect(plainPPreventSpy).not.toHaveBeenCalled();
+      });
+
+      it('should NOT prevent default on Ctrl+P or Ctrl+S when isPdfViewerVisible is false', () => {
+        component.isPdfViewerVisible = false;
+
+        const ctrlPEvent = new KeyboardEvent('keydown', {
+          key: 'p',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlPreventSpy = vi.spyOn(ctrlPEvent, 'preventDefault');
+        window.dispatchEvent(ctrlPEvent);
+        expect(ctrlPreventSpy).not.toHaveBeenCalled();
+
+        const ctrlSEvent = new KeyboardEvent('keydown', {
+          key: 's',
+          ctrlKey: true,
+          cancelable: true,
+        });
+        const ctrlSPreventSpy = vi.spyOn(ctrlSEvent, 'preventDefault');
+        window.dispatchEvent(ctrlSEvent);
+        expect(ctrlSPreventSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    // Secure Watermarked Download
+    describe('Secure Watermarked Download', () => {
+      it('should call downloadWatermarkedDocument, show info toast and success toast on onDownload', async () => {
+        const doc = mockDocuments[0];
+
+        await component.onDownload(doc);
+
+        expect(mockDocumentService.downloadWatermarkedDocument).toHaveBeenCalledWith(
+          doc.file_url,
+          doc.code,
+          doc.title,
+        );
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'info',
+            summary: 'Descarga',
+            detail: 'Preparando documento seguro...',
+          }),
+        );
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'success',
+            summary: 'Éxito',
+            detail: 'Documento descargado con marca de agua.',
+          }),
+        );
+        expect(component.downloadingDocId).toBeNull();
+      });
+
+      it('should show error toast and reset downloadingDocId when downloadWatermarkedDocument fails', async () => {
+        const doc = mockDocuments[0];
+        mockDocumentService.downloadWatermarkedDocument.mockRejectedValueOnce(
+          new Error('Download failed'),
+        );
+
+        await component.onDownload(doc);
+
+        expect(component.downloadingDocId).toBeNull();
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'error',
+            summary: 'Error al descargar',
+          }),
+        );
+      });
+
+      it('should ignore repeated calls while downloading the same document', async () => {
+        const doc = mockDocuments[0];
+        component.downloadingDocId = doc.id;
+
+        await component.onDownload(doc);
+
+        expect(mockDocumentService.downloadWatermarkedDocument).not.toHaveBeenCalled();
+      });
+
+      it('should ignore call if document has no file_url', async () => {
+        const doc = { ...mockDocuments[0], file_url: '' };
+
+        await component.onDownload(doc);
+
+        expect(mockDocumentService.downloadWatermarkedDocument).not.toHaveBeenCalled();
+      });
+
+      it('should bind the download button in DOM to onDownload and disable it while downloading', () => {
+        component.currentUserRole = 'ADMIN';
+        mockDocumentService.documents.set([...mockDocuments]);
+        fixture.detectChanges();
+
+        const onDownloadSpy = vi.spyOn(component, 'onDownload');
+        const downloadBtn = fixture.nativeElement.querySelector(
+          '#btn-download-' + mockDocuments[0].id,
+        ) as HTMLButtonElement;
+
+        expect(downloadBtn).not.toBeNull();
+        expect(downloadBtn.disabled).toBe(false);
+
+        downloadBtn.click();
+        expect(onDownloadSpy).toHaveBeenCalledWith(mockDocuments[0]);
+
+        component.downloadingDocId = mockDocuments[0].id;
+        fixture.detectChanges();
+        expect(downloadBtn.disabled).toBe(true);
+      });
     });
   });
 });
