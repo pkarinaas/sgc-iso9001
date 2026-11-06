@@ -93,6 +93,49 @@ export class DocumentService {
   }
 
   /**
+   * Fetches approved documents belonging to the specified user's assigned process areas
+   * that have not yet been acknowledged by the user.
+   *
+   * @param userId - UUID of the authenticated user.
+   * @param userAreas - Array of process areas assigned to the user.
+   * @returns Array of pending unacknowledged Document objects.
+   */
+  async getPendingDocuments(userId: string, userAreas: string[]): Promise<Document[]> {
+    if (!userId || !userAreas || userAreas.length === 0) {
+      return [];
+    }
+
+    // Query approved documents in user's assigned process areas
+    const { data: approvedDocs, error: docError } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('status', 'APPROVED')
+      .in('process_area', userAreas)
+      .order('updated_at', { ascending: false });
+
+    if (docError || !approvedDocs || approvedDocs.length === 0) {
+      return [];
+    }
+
+    // Query acknowledgements for this user
+    const { data: acks, error: ackError } = await supabase
+      .from('document_acknowledgements')
+      .select('document_id')
+      .eq('user_id', userId);
+
+    if (ackError) {
+      return approvedDocs as Document[];
+    }
+
+    // Filter documents keeping only those not in acknowledgements
+    const ackDocIds = new Set(
+      (acks ?? []).map((ack: { document_id: number | string }) => String(ack.document_id)),
+    );
+
+    return (approvedDocs as Document[]).filter((doc) => !ackDocIds.has(String(doc.id)));
+  }
+
+  /**
    * Uploads a PDF file to Supabase Storage (`sgc-files` bucket) and inserts a
    * new row in `public.documents` with the provided metadata.
    *

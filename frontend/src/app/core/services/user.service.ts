@@ -58,6 +58,28 @@ export class UserService {
   }
 
   /**
+   * Fetches an individual user's profile by their UUID.
+   *
+   * @param userId - UUID of the user.
+   * @returns The User object or null.
+   */
+  async getUserProfile(userId: string): Promise<User | null> {
+    const { data, error } = await supabase
+      .from('users')
+      .select(
+        'id, email, full_name, role_id, is_active, created_at, assigned_processes, roles(id, name, description)',
+      )
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return data as unknown as User;
+  }
+
+  /**
    * Fetches all roles from `public.roles` ordered by id ascending.
    * Used to populate the role filter dropdown.
    */

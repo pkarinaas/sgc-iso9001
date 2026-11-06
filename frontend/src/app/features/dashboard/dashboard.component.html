@@ -1,0 +1,118 @@
+<p-toast />
+
+<section class="dashboard-container">
+  <!-- Dashboard Header -->
+  <header class="dashboard-header mb-6">
+    <h1 class="text-2xl font-bold text-gray-800 m-0">Dashboard</h1>
+    <p class="text-sm text-gray-500 mt-1 m-0">
+      Panel principal del Sistema de Gestión de la Calidad
+    </p>
+  </header>
+
+  <!-- Section: Documentos Pendientes de Lectura -->
+  <div class="dashboard-card">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-xl font-bold text-gray-800 m-0">Documentos Pendientes de Lectura</h2>
+        <p class="text-sm text-gray-500 mt-1 m-0">
+          Documentos aprobados en tus procesos asignados que requieren confirmación de lectura.
+        </p>
+      </div>
+
+      @if (!isLoading() && pendingDocuments.length > 0) {
+        <span class="pending-count-badge">
+          {{ pendingDocuments.length }} pendiente{{ pendingDocuments.length > 1 ? 's' : '' }}
+        </span>
+      }
+    </div>
+
+    <!-- Loading State -->
+    @if (isLoading()) {
+      <div class="flex flex-col items-center justify-center p-12 text-gray-400">
+        <i class="pi pi-spin pi-spinner text-3xl text-[#800020] mb-2"></i>
+        <p class="text-sm text-gray-500 m-0">Cargando documentos pendientes...</p>
+      </div>
+    } @else if (pendingDocuments.length === 0) {
+      <!-- Empty State -->
+      <div class="empty-state">
+        <i class="pi pi-check-circle empty-state-icon"></i>
+        <h3 class="empty-state-title">¡Al día! No tienes documentos pendientes de lectura.</h3>
+        <p class="empty-state-text">
+          Has completado la lectura de todos los documentos asignados a tus procesos.
+        </p>
+      </div>
+    } @else {
+      <!-- Documents Table -->
+      <p-table [value]="pendingDocuments" class="pending-docs-table">
+        <ng-template #header>
+          <tr>
+            <th style="width: 20%">Código</th>
+            <th style="width: 45%">Título</th>
+            <th style="width: 15%">Versión</th>
+            <th style="width: 20%" class="text-center">Acción</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-doc>
+          <tr [id]="'pending-doc-' + doc.id">
+            <!-- Code -->
+            <td class="font-medium text-gray-700">
+              <span class="doc-code">{{ doc.code || 'S/C' }}</span>
+            </td>
+
+            <!-- Title -->
+            <td class="font-semibold text-gray-900 doc-title-cell">{{ doc.title }}</td>
+
+            <td>
+              <span class="doc-version">{{ formatVersion(doc.version) }}</span>
+            </td>
+
+            <!-- Action button -->
+            <td class="col-actions text-center">
+              <button
+                [id]="'btn-view-' + doc.id"
+                type="button"
+                pButton
+                class="p-button-info p-button-text p-button-rounded p-button-sm"
+                pTooltip="Ver documento"
+                (click)="openReader(doc)"
+                [disabled]="!doc.file_url || isLoadingPdf"
+              >
+                <i [class]="loadingPdfId === doc.id ? 'pi pi-spin pi-spinner' : 'pi pi-eye'"></i>
+              </button>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    }
+  </div>
+</section>
+
+<!-- PDF Viewer Dialog Modal -->
+<p-dialog
+  [(visible)]="isPdfViewerVisible"
+  [modal]="true"
+  [maximizable]="true"
+  [style]="{ width: '90vw' }"
+  header="Visor de Documentos"
+  [closable]="true"
+  appendTo="body"
+  (onHide)="closePdfViewer()"
+>
+  @if (currentPdfUrl) {
+    <ngx-extended-pdf-viewer
+      [src]="currentPdfUrl"
+      [textLayer]="true"
+      [showHandToolButton]="true"
+      [showPrintButton]="false"
+      [showDownloadButton]="false"
+      [supportsDownloading]="false"
+      [ignoreKeys]="pdfViewerIgnoreKeys"
+      [contextMenuAllowed]="false"
+      [showOpenFileButton]="false"
+      [showSecondaryToolbarButton]="false"
+      [showEditorButtons]="false"
+      [enablePrint]="false"
+      [height]="'80vh'"
+    ></ngx-extended-pdf-viewer>
+  }
+</p-dialog>

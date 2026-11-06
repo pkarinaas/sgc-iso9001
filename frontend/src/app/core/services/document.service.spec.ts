@@ -344,4 +344,80 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       ).rejects.toThrow('No tienes permisos para realizar esta operación en la base de datos.');
     });
   });
+
+  describe('getPendingDocuments (SCRUM-58)', () => {
+    it('should return empty array if userId or userAreas is empty', async () => {
+      const fromSpy = vi.spyOn(supabase, 'from');
+
+      expect(await service.getPendingDocuments('', ['quimica_clinica'])).toEqual([]);
+      expect(await service.getPendingDocuments('usr-1', [])).toEqual([]);
+      expect(fromSpy).not.toHaveBeenCalled();
+    });
+
+    it('should query approved documents and filter out acknowledged ones', async () => {
+      const mockApprovedDocs = [
+        { id: 101, title: 'Doc 1', status: 'APPROVED', process_area: 'quimica_clinica' },
+        { id: 102, title: 'Doc 2', status: 'APPROVED', process_area: 'hematologia' },
+        { id: 103, title: 'Doc 3', status: 'APPROVED', process_area: 'quimica_clinica' },
+      ];
+
+      const mockAcknowledgements = [
+        { document_id: 101 },
+      ];
+
+      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+        if (table === 'documents') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            order: vi.fn().mockResolvedValue({ data: mockApprovedDocs, error: null }),
+          } as any;
+        }
+        if (table === 'document_acknowledgements') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: mockAcknowledgements, error: null }),
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const pending = await service.getPendingDocuments('usr-1', ['quimica_clinica', 'hematologia']);
+
+      expect(supabase.from).toHaveBeenCalledWith('documents');
+      expect(supabase.from).toHaveBeenCalledWith('document_acknowledgements');
+      expect(pending.length).toBe(2);
+      expect(pending.map((d) => d.id)).toEqual([102, 103]);
+    });
+
+    it('should return all approved docs when user has zero acknowledgements', async () => {
+      const mockApprovedDocs = [
+        { id: 101, title: 'Doc 1', status: 'APPROVED', process_area: 'quimica_clinica' },
+      ];
+
+      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+        if (table === 'documents') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            order: vi.fn().mockResolvedValue({ data: mockApprovedDocs, error: null }),
+          } as any;
+        }
+        if (table === 'document_acknowledgements') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const pending = await service.getPendingDocuments('usr-1', ['quimica_clinica']);
+
+      expect(pending.length).toBe(1);
+      expect(pending[0].id).toBe(101);
+    });
+  });
 });

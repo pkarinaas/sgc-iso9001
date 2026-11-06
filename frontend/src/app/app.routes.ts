@@ -4,6 +4,7 @@ import { AppLayoutComponent } from './core/layout/app-layout/app-layout.componen
 import { LoginComponent } from './features/auth/login/login';
 import { UserListComponent } from './features/users/user-list/user-list';
 import { DocumentListComponent } from './features/documents/document-list/document-list';
+import { DashboardComponent } from './features/dashboard/dashboard.component';
 
 export const routes: Routes = [
   {
@@ -16,6 +17,10 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       {
+        path: 'dashboard',
+        component: DashboardComponent,
+      },
+      {
         path: 'users',
         component: UserListComponent,
       },
@@ -25,7 +30,7 @@ export const routes: Routes = [
       },
       {
         path: '',
-        redirectTo: 'documents',
+        redirectTo: 'dashboard',
         pathMatch: 'full',
       },
     ],

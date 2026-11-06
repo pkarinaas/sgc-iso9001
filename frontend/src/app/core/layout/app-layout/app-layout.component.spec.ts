@@ -110,15 +110,22 @@ describe('AppLayoutComponent', () => {
     expect(component.isWarningVisible()).toBe(true);
   });
 
-  it('should render navigation links for users and documents', () => {
+  it('should render navigation links for dashboard, users and documents', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const links = compiled.querySelectorAll('aside nav a');
-    expect(links.length).toBe(2);
+    expect(links.length).toBe(3);
 
+    const dashboardLink = Array.from(links).find(
+      (link) => link.getAttribute('routerLink') === '/dashboard',
+    );
     const userLink = Array.from(links).find((link) => link.getAttribute('routerLink') === '/users');
     const docLink = Array.from(links).find(
       (link) => link.getAttribute('routerLink') === '/documents',
     );
+
+    expect(dashboardLink).toBeTruthy();
+    expect(dashboardLink?.textContent).toContain('Dashboard');
+    expect(dashboardLink?.querySelector('.pi.pi-home')).toBeTruthy();
 
     expect(userLink).toBeTruthy();
     expect(userLink?.textContent).toContain('Usuarios');
