@@ -119,10 +119,32 @@ describe('UserListComponent', () => {
       email: 'carlos@empresa.com',
       password: 'password123',
       role_id: 1,
+      assigned_processes: ['quimica_clinica'],
     });
     fixture.detectChanges();
 
     expect(component.userForm.valid).toBe(true);
     expect(saveButton.disabled).toBe(false);
+  });
+
+  it('should include assigned_processes in payload on saveUser', async () => {
+    component.openCreateDialog();
+    component.userForm.patchValue({
+      full_name: 'Carlos Ruiz',
+      email: 'carlos@empresa.com',
+      password: 'password123',
+      role_id: 1,
+      assigned_processes: ['quimica_clinica', 'hematologia'],
+    });
+
+    await component.saveUser();
+
+    expect(mockUserService.createUser).toHaveBeenCalledWith({
+      email: 'carlos@empresa.com',
+      password: 'password123',
+      full_name: 'Carlos Ruiz',
+      role_id: 1,
+      assigned_processes: ['quimica_clinica', 'hematologia'],
+    });
   });
 });

@@ -21,6 +21,8 @@ export interface User {
   email: string;
   full_name: string;
   role_id: number | null;
+  /** Process areas assigned to the user for document visibility and reading obligations. */
+  assigned_processes?: string[];
   is_active: boolean;
   created_at: string;
   /** Nested role object returned by the Supabase join. */
@@ -36,6 +38,7 @@ export interface CreateUserPayload {
   password?: string;
   full_name: string;
   role_id: number;
+  assigned_processes?: string[];
 }
 
 /**
@@ -44,4 +47,5 @@ export interface CreateUserPayload {
 export interface UpdateUserPayload {
   full_name: string;
   role_id: number;
+  assigned_processes?: string[];
 }

@@ -230,7 +230,11 @@ button[severity='primary']:not([text='true']):hover:not(:disabled) {
 .p-select-overlay .p-select-option,
 .p-select-list .p-select-option,
 .p-select-overlay .p-select-option .p-select-option-label,
-.p-select-list .p-select-option .p-select-option-label {
+.p-select-list .p-select-option .p-select-option-label,
+.p-multiselect-overlay .p-multiselect-option,
+.p-multiselect-list .p-multiselect-option,
+.p-multiselect-overlay .p-multiselect-option .p-multiselect-option-label,
+.p-multiselect-list .p-multiselect-option .p-multiselect-option-label {
   font-size: 0.8125rem !important;
   padding: 0.4rem 0.75rem !important;
 }
@@ -238,14 +242,20 @@ button[severity='primary']:not([text='true']):hover:not(:disabled) {
 .p-select-overlay .p-select-option.p-select-option-selected,
 .p-select-overlay .p-select-option[aria-selected='true'],
 .p-select-list .p-select-option.p-select-option-selected,
-.p-select-list .p-select-option[aria-selected='true'] {
+.p-select-list .p-select-option[aria-selected='true'],
+.p-multiselect-overlay .p-multiselect-option.p-multiselect-option-selected,
+.p-multiselect-overlay .p-multiselect-option[aria-selected='true'],
+.p-multiselect-list .p-multiselect-option.p-multiselect-option-selected,
+.p-multiselect-list .p-multiselect-option[aria-selected='true'] {
   background-color: #fff1f2 !important;
   color: #881337 !important;
   font-weight: 500 !important;
 }
 
 .p-select-overlay .p-select-option:not(.p-select-option-selected):hover,
-.p-select-list .p-select-option:not(.p-select-option-selected):hover {
+.p-select-list .p-select-option:not(.p-select-option-selected):hover,
+.p-multiselect-overlay .p-multiselect-option:not(.p-multiselect-option-selected):hover,
+.p-multiselect-list .p-multiselect-option:not(.p-multiselect-option-selected):hover {
   background-color: #f8fafc !important;
   color: #1e293b !important;
 }

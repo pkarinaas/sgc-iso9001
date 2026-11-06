@@ -158,6 +158,7 @@ export class DocumentService {
       title: metadata.title,
       code: cleanCode,
       version: nextVersion,
+      process_area: metadata.process_area ?? null,
       file_url: fileUrl,
     });
 

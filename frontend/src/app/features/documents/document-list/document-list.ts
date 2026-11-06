@@ -36,6 +36,7 @@ import { NgxExtendedPdfViewerModule } from 'ngx-extended-pdf-viewer';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document, DocumentStatus } from '../../../core/models/document.model';
+import { PROCESS_AREAS } from '../../../core/constants/process-area.constant';
 
 interface DateRangeFilter {
   start: Date | null;
@@ -168,11 +169,15 @@ export class DocumentListComponent implements OnInit {
   /** Maximum allowed PDF file size in bytes (5 MB). */
   static readonly MAX_FILE_SIZE_BYTES = 5_242_880;
 
+  /** Available process/area options for document categorization. */
+  readonly processAreaOptions = PROCESS_AREAS;
+
   // Reactive form for uploading new document
 
   readonly documentForm = this.fb.group({
     title: ['', [Validators.required]],
     code: [''],
+    process_area: ['', [Validators.required]],
     file: [null as File | null, [Validators.required, DocumentListComponent.fileSizeValidator]],
   });
 
@@ -491,6 +496,7 @@ export class DocumentListComponent implements OnInit {
     this.documentForm.reset({
       title: '',
       code: '',
+      process_area: '',
       file: null,
     });
     this.fileUpload?.clear();
@@ -535,13 +541,14 @@ export class DocumentListComponent implements OnInit {
       return;
     }
 
-    const { file, title, code } = this.documentForm.value;
+    const { file, title, code, process_area } = this.documentForm.value;
 
     this.isSubmitting = true;
     try {
       await this.documentService.createDocument(file!, {
         title: title!,
         code: code ?? '',
+        process_area: process_area ?? '',
       });
 
       this.messageService.add({
@@ -552,7 +559,7 @@ export class DocumentListComponent implements OnInit {
       });
 
       this.isDialogVisible = false;
-      this.documentForm.reset({ title: '', code: '', file: null });
+      this.documentForm.reset({ title: '', code: '', process_area: '', file: null });
       this.fileUpload?.clear();
       await this.documentService.loadDocuments();
     } catch (error) {

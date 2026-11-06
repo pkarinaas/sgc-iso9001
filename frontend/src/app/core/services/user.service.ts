@@ -43,7 +43,9 @@ export class UserService {
 
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, full_name, role_id, is_active, created_at, roles(id, name, description)')
+      .select(
+        'id, email, full_name, role_id, is_active, created_at, assigned_processes, roles(id, name, description)',
+      )
       .order('full_name', { ascending: true });
 
     if (error) {
@@ -120,6 +122,7 @@ export class UserService {
       email: payload.email,
       full_name: payload.full_name,
       role_id: payload.role_id,
+      assigned_processes: payload.assigned_processes ?? [],
       is_active: true,
     });
 
@@ -133,20 +136,23 @@ export class UserService {
   }
 
   /**
-   * Updates mutable fields (`full_name`, `role_id`) for an existing user.
+   * Updates mutable fields (`full_name`, `role_id`, `assigned_processes`) for an existing user.
    *
    * @param userId  - UUID of the user record to update.
-   * @param payload - The new values for `full_name` and `role_id`.
+   * @param payload - The new values for `full_name`, `role_id`, and `assigned_processes`.
    * @returns An object whose `error` property is null on success.
    */
   async updateUser(userId: string, payload: UpdateUserPayload): Promise<{ error: string | null }> {
-    const { error } = await supabase
-      .from('users')
-      .update({
-        full_name: payload.full_name,
-        role_id: payload.role_id,
-      })
-      .eq('id', userId);
+    const updateData: Record<string, unknown> = {
+      full_name: payload.full_name,
+      role_id: payload.role_id,
+    };
+
+    if (payload.assigned_processes !== undefined) {
+      updateData['assigned_processes'] = payload.assigned_processes;
+    }
+
+    const { error } = await supabase.from('users').update(updateData).eq('id', userId);
 
     if (error) {
       return { error: error.message };

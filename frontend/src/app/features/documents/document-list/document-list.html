@@ -274,6 +274,31 @@
       />
     </div>
 
+    <!-- Process dropdown -->
+    <div class="doc-form-field">
+      <label for="select-doc-area" class="doc-form-label">
+        Proceso <span class="required-mark">*</span>
+      </label>
+      <p-select
+        id="select-doc-area"
+        formControlName="process_area"
+        [options]="processAreaOptions"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Seleccione el proceso"
+        class="w-full doc-form-select"
+        [class.ng-invalid]="
+          documentForm.controls.process_area.invalid && documentForm.controls.process_area.touched
+        "
+      ></p-select>
+      @if (
+        documentForm.controls.process_area.invalid && documentForm.controls.process_area.touched
+      ) {
+        <small class="doc-form-error">El proceso es obligatorio.</small>
+      }
+    </div>
+
     <!-- Upload component -->
     <div class="doc-form-field">
       <label class="doc-form-label"> Archivo PDF <span class="required-mark">*</span> </label>

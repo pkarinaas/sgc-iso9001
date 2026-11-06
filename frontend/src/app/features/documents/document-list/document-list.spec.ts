@@ -160,6 +160,7 @@ describe('DocumentListComponent', () => {
     expect(component.isDialogVisible).toBe(true);
     expect(component.documentForm.get('title')?.value).toBe('');
     expect(component.documentForm.get('code')?.value).toBe('');
+    expect(component.documentForm.get('process_area')?.value).toBe('');
     expect(component.documentForm.get('file')?.value).toBeNull();
   });
 
@@ -181,12 +182,13 @@ describe('DocumentListComponent', () => {
     expect(component.documentForm.get('file')?.valid).toBe(true);
   });
 
-  it('should mark form valid when all required fields (title, valid-size file) are provided', () => {
+  it('should mark form valid when all required fields (title, process_area, valid-size file) are provided', () => {
     const fakeFile = new File(['dummy'], 'norma.pdf', { type: 'application/pdf' });
 
     component.documentForm.patchValue({
       title: 'Política de Calidad',
       code: 'SGC-POL-001',
+      process_area: 'control_calidad',
       file: fakeFile,
     });
 
@@ -409,11 +411,12 @@ describe('DocumentListComponent', () => {
     expect(codeCtrl?.errors).toBeNull();
   });
 
-  it('should call createDocument with title and code without manual version on saveDocument', async () => {
+  it('should call createDocument with title, code, and process_area without manual version on saveDocument', async () => {
     const fakeFile = new File(['dummy'], 'norma.pdf', { type: 'application/pdf' });
     component.documentForm.patchValue({
       title: 'Política de Calidad',
       code: 'SGC-POL-001',
+      process_area: 'control_calidad',
       file: fakeFile,
     });
 
@@ -422,6 +425,7 @@ describe('DocumentListComponent', () => {
     expect(mockDocumentService.createDocument).toHaveBeenCalledWith(fakeFile, {
       title: 'Política de Calidad',
       code: 'SGC-POL-001',
+      process_area: 'control_calidad',
     });
     expect(mockMessageService.add).toHaveBeenCalledWith(
       expect.objectContaining({

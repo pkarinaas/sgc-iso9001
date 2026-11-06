@@ -16,6 +16,8 @@ export interface Document {
   version: number;
   /** Current state in the approval lifecycle. */
   status: DocumentStatus;
+  /** Process or operational area to which this document belongs. */
+  process_area?: string | null;
   /** Supabase Storage URL for the uploaded file, or null if not yet uploaded. */
   file_url: string | null;
   /** UUID of the user who created this document. */

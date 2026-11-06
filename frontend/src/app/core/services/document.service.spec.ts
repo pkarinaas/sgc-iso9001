@@ -96,11 +96,12 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         { upsert: true },
       );
 
-      // Verify insert used version 0 as number
+      // Verify insert used version 0 as number and null for missing process_area
       expect(mockQueryBuilder.insert).toHaveBeenCalledWith({
         title: 'New Doc',
         code: 'PE-03',
         version: 0,
+        process_area: null,
         file_url: 'https://example.com/PE-03_New_Doc_v00.pdf',
       });
     });
@@ -143,6 +144,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         title: 'Procedimiento',
         code: 'PE-03',
         version: 2,
+        process_area: null,
         file_url: 'https://example.com/PE-03_Procedimiento_v02.pdf',
       });
     });

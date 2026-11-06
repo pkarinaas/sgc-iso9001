@@ -401,6 +401,21 @@
   margin-top: 0.15rem;
 }
 
+/* Select / Dropdown in dialog */
+:host ::ng-deep .doc-form-field .p-select {
+  width: 100% !important;
+  height: 36px !important;
+  font-size: 0.84rem !important;
+}
+
+:host ::ng-deep .doc-form-field .p-select .p-select-label {
+  padding: 0.35rem 0.65rem !important;
+  font-size: 0.84rem !important;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+}
+
 /* InputNumber */
 :host ::ng-deep .doc-form-field .p-inputnumber {
   width: 100%;

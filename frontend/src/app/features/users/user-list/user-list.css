@@ -330,3 +330,22 @@
   opacity: 0.5 !important;
   cursor: not-allowed !important;
 }
+
+/* Select typography and styling inside dialog */
+:host ::ng-deep .user-form-field .p-select {
+  width: 100% !important;
+  font-size: 0.875rem !important;
+}
+
+:host ::ng-deep .user-form-field .p-select .p-select-label {
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+  padding: 0.5rem 0.75rem !important;
+  color: #334155 !important;
+}
+
+:host ::ng-deep .user-form-field .p-select .p-select-label.p-placeholder,
+:host ::ng-deep .user-form-field .p-select .p-select-label-empty {
+  color: #94a3b8 !important;
+  font-size: 0.875rem !important;
+}
