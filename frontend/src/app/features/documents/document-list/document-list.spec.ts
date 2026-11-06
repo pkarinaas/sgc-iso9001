@@ -37,6 +37,7 @@ describe('DocumentListComponent', () => {
     error: signal<string | null>(null),
     loadDocuments: vi.fn().mockResolvedValue(undefined),
     createDocument: vi.fn().mockResolvedValue(undefined),
+    updateDocument: vi.fn().mockResolvedValue(undefined),
     deleteDocument: vi.fn().mockResolvedValue(undefined),
     updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
     getNextVersionForCode: vi.fn().mockResolvedValue(1),
@@ -546,10 +547,12 @@ describe('DocumentListComponent', () => {
       const uploadBtn = fixture.nativeElement.querySelector('#btn-upload-document');
       const statusBtn = fixture.nativeElement.querySelector('#btn-status-' + mockDocuments[0].id);
       const deleteBtn = fixture.nativeElement.querySelector('#btn-delete-' + mockDocuments[0].id);
+      const editBtn = fixture.nativeElement.querySelector('#btn-edit-' + mockDocuments[0].id);
 
       expect(uploadBtn).toBeNull();
       expect(statusBtn).toBeNull();
       expect(deleteBtn).toBeNull();
+      expect(editBtn).toBeNull();
     });
   });
 
@@ -845,6 +848,106 @@ describe('DocumentListComponent', () => {
         component.downloadingDocId = mockDocuments[0].id;
         fixture.detectChanges();
         expect(downloadBtn.disabled).toBe(true);
+      });
+    });
+
+    describe('Edit Document Modal & Admin Role (SCRUM-22)', () => {
+      it('should correctly identify admin users with isAdmin', () => {
+        component.currentUserRole = 'ADMIN';
+        expect(component.isAdmin).toBe(true);
+
+        component.currentUserRole = 'EDITOR';
+        expect(component.isAdmin).toBe(false);
+
+        component.currentUserRole = 'VIEWER';
+        expect(component.isAdmin).toBe(false);
+
+        component.currentUserRole = null;
+        expect(component.isAdmin).toBe(false);
+      });
+
+      it('should render the edit button in DOM when user is ADMIN', () => {
+        component.currentUserRole = 'ADMIN';
+        mockDocumentService.documents.set([...mockDocuments]);
+        fixture.detectChanges();
+
+        const editBtn = fixture.nativeElement.querySelector('#btn-edit-' + mockDocuments[0].id);
+        expect(editBtn).not.toBeNull();
+      });
+
+      it('should not render the edit button in DOM when user is not ADMIN', () => {
+        component.currentUserRole = 'EDITOR';
+        mockDocumentService.documents.set([...mockDocuments]);
+        fixture.detectChanges();
+
+        const editBtn = fixture.nativeElement.querySelector('#btn-edit-' + mockDocuments[0].id);
+        expect(editBtn).toBeNull();
+      });
+
+      it('should open edit modal and patch form values including process_area', () => {
+        const docWithArea: Document = {
+          ...mockDocuments[0],
+          process_area: 'quimica_clinica',
+        };
+
+        component.openEditDocumentModal(docWithArea);
+
+        expect(component.isEditModalVisible).toBe(true);
+        expect(component.editingDocument).toBe(docWithArea);
+        expect(component.editDocumentForm.value).toEqual({
+          title: docWithArea.title,
+          code: docWithArea.code,
+          process_area: 'quimica_clinica',
+        });
+      });
+
+      it('should close edit modal and reset form on closeEditDocumentModal', () => {
+        component.openEditDocumentModal(mockDocuments[0]);
+        expect(component.isEditModalVisible).toBe(true);
+
+        component.closeEditDocumentModal();
+        expect(component.isEditModalVisible).toBe(false);
+        expect(component.editingDocument).toBeNull();
+      });
+
+      it('should validate required fields in editDocumentForm', () => {
+        component.openEditDocumentModal(mockDocuments[0]);
+
+        component.editDocumentForm.patchValue({
+          title: '',
+          process_area: '',
+        });
+
+        expect(component.editDocumentForm.invalid).toBe(true);
+        expect(component.editDocumentForm.controls.title.errors?.['required']).toBe(true);
+        expect(component.editDocumentForm.controls.process_area.errors?.['required']).toBe(true);
+      });
+
+      it('should call updateDocument with patched fields on saveEditDocument', async () => {
+        const docToEdit = mockDocuments[0];
+        component.openEditDocumentModal(docToEdit);
+
+        component.editDocumentForm.patchValue({
+          title: 'Manual Modificado',
+          code: 'SGC-MAN-002',
+          process_area: 'hematologia',
+        });
+
+        await component.saveEditDocument();
+
+        expect(mockDocumentService.updateDocument).toHaveBeenCalledWith(docToEdit.id, {
+          title: 'Manual Modificado',
+          code: 'SGC-MAN-002',
+          process_area: 'hematologia',
+        });
+        expect(component.isEditModalVisible).toBe(false);
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'success',
+            summary: 'Documento actualizado',
+          }),
+        );
+        expect(mockDocumentService.loadDocuments).toHaveBeenCalled();
       });
     });
   });

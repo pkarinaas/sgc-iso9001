@@ -62,6 +62,37 @@ export class DocumentService {
   }
 
   /**
+   * Updates an existing document's metadata (title, code, process_area) in `public.documents`.
+   *
+   * @param id - The ID of the document to update.
+   * @param metadata - Partial document metadata containing fields to update.
+   * @throws Error with a user-friendly message if DB update fails.
+   */
+  async updateDocument(id: number | string, metadata: Partial<Document>): Promise<void> {
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (metadata.title !== undefined) {
+      updatePayload['title'] = metadata.title.trim();
+    }
+    if (metadata.code !== undefined) {
+      updatePayload['code'] = metadata.code?.trim() || null;
+    }
+    if (metadata.process_area !== undefined) {
+      updatePayload['process_area'] = metadata.process_area || null;
+    }
+
+    const { error } = await supabase.from('documents').update(updatePayload).eq('id', id);
+
+    if (error) {
+      throw new Error(
+        `Error al actualizar el documento: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+  }
+
+  /**
    * Uploads a PDF file to Supabase Storage (`sgc-files` bucket) and inserts a
    * new row in `public.documents` with the provided metadata.
    *

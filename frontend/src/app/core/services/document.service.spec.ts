@@ -305,4 +305,43 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       revokeObjectURLSpy.mockRestore();
     });
   });
+
+  describe('updateDocument', () => {
+    it('should send updated metadata to Supabase including process_area', async () => {
+      const mockQueryBuilder = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      await service.updateDocument('doc-123', {
+        title: 'Updated Title',
+        code: 'SGC-01',
+        process_area: 'quimica_clinica',
+      });
+
+      expect(supabase.from).toHaveBeenCalledWith('documents');
+      expect(mockQueryBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Updated Title',
+          code: 'SGC-01',
+          process_area: 'quimica_clinica',
+          updated_at: expect.any(String),
+        }),
+      );
+      expect(mockQueryBuilder.eq).toHaveBeenCalledWith('id', 'doc-123');
+    });
+
+    it('should throw an error with translated message when DB update fails', async () => {
+      const mockQueryBuilder = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: { message: 'new row violates row-level security policy' } }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      await expect(
+        service.updateDocument('doc-123', { title: 'Title' }),
+      ).rejects.toThrow('No tienes permisos para realizar esta operación en la base de datos.');
+    });
+  });
 });

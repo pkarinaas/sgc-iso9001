@@ -147,4 +147,33 @@ describe('UserListComponent', () => {
       assigned_processes: ['quimica_clinica', 'hematologia'],
     });
   });
+
+  it('should patch assigned_processes and include them on updateUser in edit mode', async () => {
+    const userToEdit: User = {
+      id: 'usr-1',
+      full_name: 'Ana García',
+      email: 'ana@empresa.com',
+      role_id: 2,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      assigned_processes: ['bacteriologia', 'guardia'],
+    };
+
+    component.openEditDialog(userToEdit);
+
+    expect(component.isEditMode()).toBe(true);
+    expect(component.userForm.controls.assigned_processes.value).toEqual(['bacteriologia', 'guardia']);
+
+    component.userForm.patchValue({
+      assigned_processes: ['quimica_clinica'],
+    });
+
+    await component.saveUser();
+
+    expect(mockUserService.updateUser).toHaveBeenCalledWith('usr-1', {
+      full_name: 'Ana García',
+      role_id: 2,
+      assigned_processes: ['quimica_clinica'],
+    });
+  });
 });
