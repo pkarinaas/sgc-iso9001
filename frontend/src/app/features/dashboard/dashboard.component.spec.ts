@@ -212,6 +212,83 @@ describe('DashboardComponent', () => {
     });
   });
 
+  describe('Mandatory Reading Acknowledgement (SCRUM-59)', () => {
+    it('should set requiresAcknowledgement = true when openReader is called from pending documents', async () => {
+      await component.openReader(mockPendingDocs[0], true);
+      expect(component.requiresAcknowledgement).toBe(true);
+      expect(component.acknowledgementChecked).toBe(false);
+    });
+
+    it('should show acknowledgement footer in dialog when requiresAcknowledgement is true', async () => {
+      await component.openReader(mockPendingDocs[0], true);
+      fixture.detectChanges();
+
+      const ackCheck = document.body.querySelector('#ack-check');
+      expect(ackCheck).not.toBeNull();
+      expect(document.body.textContent).toContain(
+        'Declaro haber leído y comprendido las directrices de este documento.',
+      );
+      const confirmBtn = document.body.querySelector('button[label="Confirmar lectura"]');
+      expect(confirmBtn).not.toBeNull();
+    });
+
+    it('should not show acknowledgement footer when requiresAcknowledgement is false', async () => {
+      await component.openReader(mockPendingDocs[0], false);
+      fixture.detectChanges();
+
+      const ackCheck = document.body.querySelector('#ack-check');
+      expect(ackCheck).toBeNull();
+    });
+
+    it('should disable confirm button when acknowledgementChecked is false', async () => {
+      await component.openReader(mockPendingDocs[0], true);
+      component.acknowledgementChecked = false;
+      fixture.detectChanges();
+
+      const confirmBtn = document.body.querySelector(
+        'button[label="Confirmar lectura"]',
+      ) as HTMLButtonElement;
+      expect(confirmBtn?.disabled).toBe(true);
+    });
+
+    it('should emit acknowledge event and close modal on confirmAcknowledgement when checked', async () => {
+      const acknowledgeSpy = vi.spyOn(component.acknowledge, 'emit');
+      const closeSpy = vi.spyOn(component, 'closePdfViewer');
+
+      await component.openReader(mockPendingDocs[0], true);
+      component.acknowledgementChecked = true;
+
+      component.confirmAcknowledgement();
+
+      expect(acknowledgeSpy).toHaveBeenCalled();
+      expect(closeSpy).toHaveBeenCalled();
+      expect(component.isPdfViewerVisible).toBe(false);
+    });
+
+    it('should not emit acknowledge event if confirmAcknowledgement is called when unchecked', async () => {
+      const acknowledgeSpy = vi.spyOn(component.acknowledge, 'emit');
+
+      await component.openReader(mockPendingDocs[0], true);
+      component.acknowledgementChecked = false;
+
+      component.confirmAcknowledgement();
+
+      expect(acknowledgeSpy).not.toHaveBeenCalled();
+      expect(component.isPdfViewerVisible).toBe(true);
+    });
+
+    it('should reset acknowledgement state when modal is closed', async () => {
+      await component.openReader(mockPendingDocs[0], true);
+      component.acknowledgementChecked = true;
+
+      component.closePdfViewer();
+
+      expect(component.isPdfViewerVisible).toBe(false);
+      expect(component.acknowledgementChecked).toBe(false);
+      expect(component.requiresAcknowledgement).toBe(false);
+    });
+  });
+
   it('should display friendly empty state when there are no pending documents', async () => {
     mockDocumentService.getPendingDocuments.mockResolvedValue([]);
     await component.loadPendingDocuments();

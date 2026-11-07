@@ -74,7 +74,7 @@
                 pButton
                 class="p-button-info p-button-text p-button-rounded p-button-sm"
                 pTooltip="Ver documento"
-                (click)="openReader(doc)"
+                (click)="openReader(doc, true)"
                 [disabled]="!doc.file_url || isLoadingPdf"
               >
                 <i [class]="loadingPdfId === doc.id ? 'pi pi-spin pi-spinner' : 'pi pi-eye'"></i>
@@ -114,5 +114,31 @@
       [enablePrint]="false"
       [height]="'80vh'"
     ></ngx-extended-pdf-viewer>
+
+    @if (requiresAcknowledgement) {
+      <div class="flex align-items-center gap-2 mt-3 p-3 border-top-1 surface-border bg-surface-50">
+        <p-checkbox
+          [(ngModel)]="acknowledgementChecked"
+          [binary]="true"
+          inputId="ack-check"
+        ></p-checkbox>
+        <label for="ack-check" class="cursor-pointer font-medium text-color-secondary">
+          Declaro haber leído y comprendido las directrices de este documento.
+        </label>
+        <button
+          pButton
+          type="button"
+          label="Confirmar lectura"
+          icon="pi pi-check"
+          class="ml-auto"
+          severity="primary"
+          [disabled]="!acknowledgementChecked"
+          (click)="confirmAcknowledgement()"
+        >
+          <i class="pi pi-check"></i>
+          <span>Confirmar lectura</span>
+        </button>
+      </div>
+    }
   }
 </p-dialog>

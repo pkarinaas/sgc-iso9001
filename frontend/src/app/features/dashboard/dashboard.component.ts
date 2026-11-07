@@ -1,7 +1,19 @@
-import { ChangeDetectorRef, Component, HostListener, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  HostListener,
+  inject,
+  Input,
+  OnInit,
+  Output,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
 import { ButtonDirective } from 'primeng/button';
+import { Checkbox } from 'primeng/checkbox';
 import { CardModule } from 'primeng/card';
 import { TagModule } from 'primeng/tag';
 import { DialogModule } from 'primeng/dialog';
@@ -27,8 +39,10 @@ import type { User } from '../../core/models/user.model';
   providers: [MessageService],
   imports: [
     CommonModule,
+    FormsModule,
     TableModule,
     ButtonDirective,
+    Checkbox,
     CardModule,
     TagModule,
     DialogModule,
@@ -69,6 +83,15 @@ export class DashboardComponent implements OnInit {
 
   /** Signed URL of the PDF document currently loaded in the viewer. */
   currentPdfUrl: string | null = null;
+
+  /** Flag determining whether the mandatory reading acknowledgement UI is shown. */
+  @Input() requiresAcknowledgement = false;
+
+  /** Checkbox state for acknowledging mandatory document reading. */
+  acknowledgementChecked = false;
+
+  /** Emitted when the user confirms mandatory reading acknowledgement. */
+  @Output() readonly acknowledge = new EventEmitter<void>();
 
   /** Shortcuts to ignore in ngx-extended-pdf-viewer to prevent download/print. */
   readonly pdfViewerIgnoreKeys: string[] = [
@@ -131,8 +154,9 @@ export class DashboardComponent implements OnInit {
    * a temporary signed URL from Supabase Storage.
    *
    * @param doc - The document to view.
+   * @param requiresAcknowledgement - Whether mandatory reading acknowledgement is required.
    */
-  async openReader(doc: Document): Promise<void> {
+  async openReader(doc: Document, requiresAcknowledgement = true): Promise<void> {
     if (this.isLoadingPdf || !doc.file_url) {
       if (!doc.file_url) {
         this.messageService.add({
@@ -145,6 +169,8 @@ export class DashboardComponent implements OnInit {
       return;
     }
 
+    this.requiresAcknowledgement = requiresAcknowledgement;
+    this.acknowledgementChecked = false;
     this.isLoadingPdf = true;
     this.loadingPdfId = doc.id;
     this.cdr.markForCheck();
@@ -179,11 +205,25 @@ export class DashboardComponent implements OnInit {
   }
 
   /**
-   * Closes the PDF viewer modal and resets the URL.
+   * Confirms mandatory reading acknowledgement for the active document.
+   * Emits the acknowledge event and closes the PDF viewer modal.
+   */
+  confirmAcknowledgement(): void {
+    if (!this.acknowledgementChecked) {
+      return;
+    }
+    this.acknowledge.emit();
+    this.closePdfViewer();
+  }
+
+  /**
+   * Closes the PDF viewer modal and resets the URL and acknowledgement state.
    */
   closePdfViewer(): void {
     this.isPdfViewerVisible = false;
     this.currentPdfUrl = null;
+    this.acknowledgementChecked = false;
+    this.requiresAcknowledgement = false;
     this.cdr.markForCheck();
   }
 
