@@ -119,10 +119,61 @@ describe('UserListComponent', () => {
       email: 'carlos@empresa.com',
       password: 'password123',
       role_id: 1,
+      assigned_processes: ['quimica_clinica'],
     });
     fixture.detectChanges();
 
     expect(component.userForm.valid).toBe(true);
     expect(saveButton.disabled).toBe(false);
+  });
+
+  it('should include assigned_processes in payload on saveUser', async () => {
+    component.openCreateDialog();
+    component.userForm.patchValue({
+      full_name: 'Carlos Ruiz',
+      email: 'carlos@empresa.com',
+      password: 'password123',
+      role_id: 1,
+      assigned_processes: ['quimica_clinica', 'hematologia'],
+    });
+
+    await component.saveUser();
+
+    expect(mockUserService.createUser).toHaveBeenCalledWith({
+      email: 'carlos@empresa.com',
+      password: 'password123',
+      full_name: 'Carlos Ruiz',
+      role_id: 1,
+      assigned_processes: ['quimica_clinica', 'hematologia'],
+    });
+  });
+
+  it('should patch assigned_processes and include them on updateUser in edit mode', async () => {
+    const userToEdit: User = {
+      id: 'usr-1',
+      full_name: 'Ana García',
+      email: 'ana@empresa.com',
+      role_id: 2,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      assigned_processes: ['bacteriologia', 'guardia'],
+    };
+
+    component.openEditDialog(userToEdit);
+
+    expect(component.isEditMode()).toBe(true);
+    expect(component.userForm.controls.assigned_processes.value).toEqual(['bacteriologia', 'guardia']);
+
+    component.userForm.patchValue({
+      assigned_processes: ['quimica_clinica'],
+    });
+
+    await component.saveUser();
+
+    expect(mockUserService.updateUser).toHaveBeenCalledWith('usr-1', {
+      full_name: 'Ana García',
+      role_id: 2,
+      assigned_processes: ['quimica_clinica'],
+    });
   });
 });

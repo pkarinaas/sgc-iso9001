@@ -155,6 +155,21 @@
           <!-- Action buttons -->
           <td class="col-actions">
             <div class="flex flex-row items-center justify-center gap-2 whitespace-nowrap">
+              <!-- Edit (Admin only) -->
+              @if (isAdmin) {
+                <button
+                  [id]="'btn-edit-' + doc.id"
+                  type="button"
+                  pButton
+                  icon="pi pi-pencil"
+                  class="p-button-rounded p-button-text p-button-sm"
+                  pTooltip="Editar documento"
+                  (click)="openEditDocumentModal(doc)"
+                >
+                  <i class="pi pi-pencil"></i>
+                </button>
+              }
+
               <!-- Download -->
               <button
                 [id]="'btn-download-' + doc.id"
@@ -274,6 +289,31 @@
       />
     </div>
 
+    <!-- Process dropdown -->
+    <div class="doc-form-field">
+      <label for="select-doc-area" class="doc-form-label">
+        Proceso <span class="required-mark">*</span>
+      </label>
+      <p-select
+        id="select-doc-area"
+        formControlName="process_area"
+        [options]="processAreaOptions"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Seleccione el proceso"
+        class="w-full doc-form-select"
+        [class.ng-invalid]="
+          documentForm.controls.process_area.invalid && documentForm.controls.process_area.touched
+        "
+      ></p-select>
+      @if (
+        documentForm.controls.process_area.invalid && documentForm.controls.process_area.touched
+      ) {
+        <small class="doc-form-error">El proceso es obligatorio.</small>
+      }
+    </div>
+
     <!-- Upload component -->
     <div class="doc-form-field">
       <label class="doc-form-label"> Archivo PDF <span class="required-mark">*</span> </label>
@@ -318,6 +358,104 @@
         severity="primary"
         [loading]="isSubmitting"
         [disabled]="documentForm.invalid || isSubmitting"
+      >
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </form>
+</p-dialog>
+
+<!-- Edit Document Dialog Modal -->
+<p-dialog
+  [(visible)]="isEditModalVisible"
+  [modal]="true"
+  [style]="{ width: '450px' }"
+  header="Editar Documento"
+  [closable]="true"
+  (onHide)="closeEditDocumentModal()"
+>
+  <form [formGroup]="editDocumentForm" (ngSubmit)="saveEditDocument()" class="doc-dialog-form">
+    <!-- Title input -->
+    <div class="doc-form-field">
+      <label for="input-edit-doc-title" class="doc-form-label">
+        Título <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-edit-doc-title"
+        type="text"
+        pInputText
+        formControlName="title"
+        placeholder="Ej. Manual de Calidad"
+        class="doc-form-input"
+        [class.ng-invalid]="
+          editDocumentForm.controls.title.invalid && editDocumentForm.controls.title.touched
+        "
+      />
+      @if (editDocumentForm.controls.title.invalid && editDocumentForm.controls.title.touched) {
+        <small class="doc-form-error">El título es obligatorio.</small>
+      }
+    </div>
+
+    <!-- Code input -->
+    <div class="doc-form-field">
+      <label for="input-edit-doc-code" class="doc-form-label"> Código </label>
+      <input
+        id="input-edit-doc-code"
+        type="text"
+        pInputText
+        formControlName="code"
+        placeholder="Ej. SGC-MAN-001"
+        class="doc-form-input"
+      />
+    </div>
+
+    <!-- Process dropdown -->
+    <div class="doc-form-field">
+      <label for="select-edit-doc-area" class="doc-form-label">
+        Proceso <span class="required-mark">*</span>
+      </label>
+      <p-select
+        id="select-edit-doc-area"
+        formControlName="process_area"
+        [options]="processAreaOptions"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Seleccione el proceso"
+        class="w-full doc-form-select"
+        [class.ng-invalid]="
+          editDocumentForm.controls.process_area.invalid &&
+          editDocumentForm.controls.process_area.touched
+        "
+      ></p-select>
+      @if (
+        editDocumentForm.controls.process_area.invalid &&
+        editDocumentForm.controls.process_area.touched
+      ) {
+        <small class="doc-form-error">El proceso es obligatorio.</small>
+      }
+    </div>
+
+    <!-- Dialog footer with Cancel and Save buttons -->
+    <div class="doc-form-actions">
+      <button
+        id="btn-edit-dialog-cancel"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        (click)="closeEditDocumentModal()"
+        [disabled]="isSubmittingEdit"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button
+        id="btn-edit-dialog-save"
+        type="submit"
+        pButton
+        severity="primary"
+        [loading]="isSubmittingEdit"
+        [disabled]="editDocumentForm.invalid || isSubmittingEdit"
       >
         <span pButtonLabel>Guardar</span>
       </button>

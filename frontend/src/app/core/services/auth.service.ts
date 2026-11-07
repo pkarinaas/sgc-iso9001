@@ -153,6 +153,37 @@ export class AuthService {
     }
   }
 
+  /**
+   * Retrieves the current user's profile from public.users including assigned_processes.
+   *
+   * @returns The User object or null if unauthenticated or not found.
+   */
+  async getCurrentUserProfile(): Promise<any | null> {
+    await this.waitForInitialization();
+    const session = this._session();
+    if (!session?.user) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select(
+          'id, email, full_name, role_id, is_active, created_at, assigned_processes, roles(id, name, description)',
+        )
+        .eq('id', session.user.id)
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
   /** Signs the current user out and navigates to the login page. */
   async signOut(): Promise<void> {
     await supabase.auth.signOut();

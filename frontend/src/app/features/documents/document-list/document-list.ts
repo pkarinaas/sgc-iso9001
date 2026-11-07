@@ -36,6 +36,7 @@ import { NgxExtendedPdfViewerModule } from 'ngx-extended-pdf-viewer';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document, DocumentStatus } from '../../../core/models/document.model';
+import { PROCESS_AREAS } from '../../../core/constants/process-area.constant';
 
 interface DateRangeFilter {
   start: Date | null;
@@ -107,6 +108,25 @@ export class DocumentListComponent implements OnInit {
   /** True while the upload/save operation is in-flight. */
   isSubmitting = false;
 
+  // Edit document dialog state
+
+  /** Controls the visibility of the edit document dialog modal. */
+  isEditModalVisible = false;
+
+  /** Alias getter/setter for compatibility. */
+  get isEditDocumentModalVisible(): boolean {
+    return this.isEditModalVisible;
+  }
+  set isEditDocumentModalVisible(value: boolean) {
+    this.isEditModalVisible = value;
+  }
+
+  /** True while the edit document operation is in-flight. */
+  isSubmittingEdit = false;
+
+  /** Document currently selected for editing. */
+  editingDocument: Document | null = null;
+
   // PDF viewer modal state
 
   /** Controls the visibility of the PDF viewer dialog modal. */
@@ -168,12 +188,24 @@ export class DocumentListComponent implements OnInit {
   /** Maximum allowed PDF file size in bytes (5 MB). */
   static readonly MAX_FILE_SIZE_BYTES = 5_242_880;
 
+  /** Available process/area options for document categorization. */
+  readonly processAreaOptions = PROCESS_AREAS;
+
   // Reactive form for uploading new document
 
   readonly documentForm = this.fb.group({
     title: ['', [Validators.required]],
     code: [''],
+    process_area: ['', [Validators.required]],
     file: [null as File | null, [Validators.required, DocumentListComponent.fileSizeValidator]],
+  });
+
+  // Reactive form for editing existing document metadata
+
+  readonly editDocumentForm = this.fb.group({
+    title: ['', [Validators.required]],
+    code: [''],
+    process_area: ['', [Validators.required]],
   });
 
   /**
@@ -491,6 +523,7 @@ export class DocumentListComponent implements OnInit {
     this.documentForm.reset({
       title: '',
       code: '',
+      process_area: '',
       file: null,
     });
     this.fileUpload?.clear();
@@ -535,13 +568,14 @@ export class DocumentListComponent implements OnInit {
       return;
     }
 
-    const { file, title, code } = this.documentForm.value;
+    const { file, title, code, process_area } = this.documentForm.value;
 
     this.isSubmitting = true;
     try {
       await this.documentService.createDocument(file!, {
         title: title!,
         code: code ?? '',
+        process_area: process_area ?? '',
       });
 
       this.messageService.add({
@@ -552,7 +586,7 @@ export class DocumentListComponent implements OnInit {
       });
 
       this.isDialogVisible = false;
-      this.documentForm.reset({ title: '', code: '', file: null });
+      this.documentForm.reset({ title: '', code: '', process_area: '', file: null });
       this.fileUpload?.clear();
       await this.documentService.loadDocuments();
     } catch (error) {
@@ -565,6 +599,80 @@ export class DocumentListComponent implements OnInit {
       });
     } finally {
       this.isSubmitting = false;
+    }
+  }
+
+  // Edit document methods
+
+  /**
+   * Opens the edit document modal dialog pre-populated with the selected document's data.
+   *
+   * @param doc - The document to edit.
+   */
+  openEditDocumentModal(doc: Document): void {
+    this.editingDocument = doc;
+    this.editDocumentForm.reset();
+    this.editDocumentForm.patchValue({
+      title: doc.title,
+      code: doc.code ?? '',
+      process_area: doc.process_area ?? '',
+    });
+    this.isEditModalVisible = true;
+  }
+
+  /**
+   * Closes the edit document modal dialog and resets state.
+   */
+  closeEditDocumentModal(): void {
+    this.isEditModalVisible = false;
+    this.editingDocument = null;
+    this.editDocumentForm.reset();
+  }
+
+  /**
+   * Submits the updated document metadata to Supabase via `DocumentService.updateDocument()`.
+   */
+  async saveEditDocument(): Promise<void> {
+    if (this.editDocumentForm.invalid || this.isSubmittingEdit) {
+      this.editDocumentForm.markAllAsTouched();
+      return;
+    }
+
+    if (!this.editingDocument) {
+      return;
+    }
+
+    const { title, code, process_area } = this.editDocumentForm.value;
+    this.isSubmittingEdit = true;
+
+    try {
+      await this.documentService.updateDocument(this.editingDocument.id, {
+        title: title!,
+        code: code ?? '',
+        process_area: process_area ?? '',
+      });
+
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Documento actualizado',
+        detail: 'El documento se actualizó correctamente.',
+        life: 4000,
+      });
+
+      this.isEditModalVisible = false;
+      this.editingDocument = null;
+      this.editDocumentForm.reset();
+      await this.documentService.loadDocuments();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al actualizar el documento.';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error al actualizar',
+        detail: this.formatErrorMessage(message),
+        life: 6000,
+      });
+    } finally {
+      this.isSubmittingEdit = false;
     }
   }
 
@@ -636,6 +744,13 @@ export class DocumentListComponent implements OnInit {
   }
 
   // Role-based action helpers
+
+  /**
+   * Indicates whether the currently authenticated user has the 'ADMIN' role.
+   */
+  get isAdmin(): boolean {
+    return this.currentUserRole === 'ADMIN';
+  }
 
   /**
    * Determines whether management actions should be visible for the given role.

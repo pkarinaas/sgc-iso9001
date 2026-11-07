@@ -17,6 +17,9 @@ export class DocumentService {
   private readonly _loading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
 
+  /** Direct Supabase client instance reference. */
+  readonly supabase = supabase;
+
   /** List of documents returned by the last successful `loadDocuments()` call. */
   readonly documents = this._documents.asReadonly();
 
@@ -59,6 +62,108 @@ export class DocumentService {
         `Error al actualizar el estado del documento: ${this.translateDatabaseError(error.message)}`,
       );
     }
+  }
+
+  /**
+   * Updates an existing document's metadata (title, code, process_area) in `public.documents`.
+   *
+   * @param id - The ID of the document to update.
+   * @param metadata - Partial document metadata containing fields to update.
+   * @throws Error with a user-friendly message if DB update fails.
+   */
+  async updateDocument(id: number | string, metadata: Partial<Document>): Promise<void> {
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (metadata.title !== undefined) {
+      updatePayload['title'] = metadata.title.trim();
+    }
+    if (metadata.code !== undefined) {
+      updatePayload['code'] = metadata.code?.trim() || null;
+    }
+    if (metadata.process_area !== undefined) {
+      updatePayload['process_area'] = metadata.process_area || null;
+    }
+
+    const { error } = await supabase.from('documents').update(updatePayload).eq('id', id);
+
+    if (error) {
+      throw new Error(
+        `Error al actualizar el documento: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+  }
+
+  /**
+   * Fetches approved documents belonging to the specified user's assigned process areas
+   * that have not yet been acknowledged by the user.
+   *
+   * @param userId - UUID of the authenticated user.
+   * @param userAreas - Array of process areas assigned to the user.
+   * @returns Array of pending unacknowledged Document objects.
+   */
+  async getPendingDocuments(userId: string, userAreas: string[]): Promise<Document[]> {
+    if (!userId || !userAreas || userAreas.length === 0) {
+      return [];
+    }
+
+    // Query approved documents in user's assigned process areas
+    const { data: approvedDocs, error: docError } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('status', 'APPROVED')
+      .in('process_area', userAreas)
+      .order('updated_at', { ascending: false });
+
+    if (docError || !approvedDocs || approvedDocs.length === 0) {
+      return [];
+    }
+
+    // Query acknowledgements for this user
+    const { data: acks, error: ackError } = await supabase
+      .from('document_acknowledgements')
+      .select('document_id')
+      .eq('user_id', userId);
+
+    if (ackError) {
+      return approvedDocs as Document[];
+    }
+
+    // Filter documents keeping only those not in acknowledgements
+    const ackDocIds = new Set(
+      (acks ?? []).map((ack: { document_id: number | string }) => String(ack.document_id)),
+    );
+
+    return (approvedDocs as Document[]).filter((doc) => !ackDocIds.has(String(doc.id)));
+  }
+
+  /**
+   * Records a user's mandatory reading acknowledgement for a document in
+   * `public.document_acknowledgements`.
+   *
+   * @param documentId - The ID of the acknowledged document.
+   * @param userId - The ID of the acknowledging user.
+   * @returns Supabase response or inserted acknowledgement record.
+   * @throws Error if documentId or userId is missing or if DB insertion fails.
+   */
+  async acknowledgeDocument(documentId: string | number, userId: string): Promise<any> {
+    if (!documentId || !userId) {
+      throw new Error('Faltan datos obligatorios para confirmar la lectura.');
+    }
+
+    const { data, error } = await this.supabase
+      .from('document_acknowledgements')
+      .insert({ document_id: documentId, user_id: userId })
+      .select();
+
+    if (error) {
+      throw new Error(
+        `Error al registrar confirmación de lectura: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+
+    return data;
   }
 
   /**
@@ -158,6 +263,7 @@ export class DocumentService {
       title: metadata.title,
       code: cleanCode,
       version: nextVersion,
+      process_area: metadata.process_area ?? null,
       file_url: fileUrl,
     });
 

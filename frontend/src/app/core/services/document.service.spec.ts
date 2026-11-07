@@ -96,11 +96,12 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         { upsert: true },
       );
 
-      // Verify insert used version 0 as number
+      // Verify insert used version 0 as number and null for missing process_area
       expect(mockQueryBuilder.insert).toHaveBeenCalledWith({
         title: 'New Doc',
         code: 'PE-03',
         version: 0,
+        process_area: null,
         file_url: 'https://example.com/PE-03_New_Doc_v00.pdf',
       });
     });
@@ -143,6 +144,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         title: 'Procedimiento',
         code: 'PE-03',
         version: 2,
+        process_area: null,
         file_url: 'https://example.com/PE-03_Procedimiento_v02.pdf',
       });
     });
@@ -301,6 +303,165 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       createElementSpy.mockRestore();
       createObjectURLSpy.mockRestore();
       revokeObjectURLSpy.mockRestore();
+    });
+  });
+
+  describe('updateDocument', () => {
+    it('should send updated metadata to Supabase including process_area', async () => {
+      const mockQueryBuilder = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      await service.updateDocument('doc-123', {
+        title: 'Updated Title',
+        code: 'SGC-01',
+        process_area: 'quimica_clinica',
+      });
+
+      expect(supabase.from).toHaveBeenCalledWith('documents');
+      expect(mockQueryBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Updated Title',
+          code: 'SGC-01',
+          process_area: 'quimica_clinica',
+          updated_at: expect.any(String),
+        }),
+      );
+      expect(mockQueryBuilder.eq).toHaveBeenCalledWith('id', 'doc-123');
+    });
+
+    it('should throw an error with translated message when DB update fails', async () => {
+      const mockQueryBuilder = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: { message: 'new row violates row-level security policy' } }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      await expect(
+        service.updateDocument('doc-123', { title: 'Title' }),
+      ).rejects.toThrow('No tienes permisos para realizar esta operación en la base de datos.');
+    });
+  });
+
+  describe('getPendingDocuments (SCRUM-58)', () => {
+    it('should return empty array if userId or userAreas is empty', async () => {
+      const fromSpy = vi.spyOn(supabase, 'from');
+
+      expect(await service.getPendingDocuments('', ['quimica_clinica'])).toEqual([]);
+      expect(await service.getPendingDocuments('usr-1', [])).toEqual([]);
+      expect(fromSpy).not.toHaveBeenCalled();
+    });
+
+    it('should query approved documents and filter out acknowledged ones', async () => {
+      const mockApprovedDocs = [
+        { id: 101, title: 'Doc 1', status: 'APPROVED', process_area: 'quimica_clinica' },
+        { id: 102, title: 'Doc 2', status: 'APPROVED', process_area: 'hematologia' },
+        { id: 103, title: 'Doc 3', status: 'APPROVED', process_area: 'quimica_clinica' },
+      ];
+
+      const mockAcknowledgements = [
+        { document_id: 101 },
+      ];
+
+      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+        if (table === 'documents') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            order: vi.fn().mockResolvedValue({ data: mockApprovedDocs, error: null }),
+          } as any;
+        }
+        if (table === 'document_acknowledgements') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: mockAcknowledgements, error: null }),
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const pending = await service.getPendingDocuments('usr-1', ['quimica_clinica', 'hematologia']);
+
+      expect(supabase.from).toHaveBeenCalledWith('documents');
+      expect(supabase.from).toHaveBeenCalledWith('document_acknowledgements');
+      expect(pending.length).toBe(2);
+      expect(pending.map((d) => d.id)).toEqual([102, 103]);
+    });
+
+    it('should return all approved docs when user has zero acknowledgements', async () => {
+      const mockApprovedDocs = [
+        { id: 101, title: 'Doc 1', status: 'APPROVED', process_area: 'quimica_clinica' },
+      ];
+
+      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+        if (table === 'documents') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            order: vi.fn().mockResolvedValue({ data: mockApprovedDocs, error: null }),
+          } as any;
+        }
+        if (table === 'document_acknowledgements') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const pending = await service.getPendingDocuments('usr-1', ['quimica_clinica']);
+
+      expect(pending.length).toBe(1);
+      expect(pending[0].id).toBe(101);
+    });
+  });
+
+  describe('acknowledgeDocument (SCRUM-60)', () => {
+    it('should throw error if documentId or userId is missing', async () => {
+      await expect(service.acknowledgeDocument('', 'usr-1')).rejects.toThrow(
+        'Faltan datos obligatorios para confirmar la lectura.',
+      );
+      await expect(service.acknowledgeDocument('doc-101', '')).rejects.toThrow(
+        'Faltan datos obligatorios para confirmar la lectura.',
+      );
+    });
+
+    it('should insert into document_acknowledgements table and return data', async () => {
+      const mockInserted = [{ id: 'ack-1', document_id: 'doc-101', user_id: 'usr-1' }];
+      const mockQueryBuilder = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({ data: mockInserted, error: null }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      const result = await service.acknowledgeDocument('doc-101', 'usr-1');
+
+      expect(supabase.from).toHaveBeenCalledWith('document_acknowledgements');
+      expect(mockQueryBuilder.insert).toHaveBeenCalledWith({
+        document_id: 'doc-101',
+        user_id: 'usr-1',
+      });
+      expect(result).toEqual(mockInserted);
+    });
+
+    it('should throw translated error when database insert fails', async () => {
+      const mockQueryBuilder = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'row-level security policy violated' },
+        }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      await expect(service.acknowledgeDocument('doc-101', 'usr-1')).rejects.toThrow(
+        'No tienes permisos para realizar esta operación en la base de datos.',
+      );
     });
   });
 });
