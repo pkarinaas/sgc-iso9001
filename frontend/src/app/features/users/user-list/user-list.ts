@@ -15,6 +15,7 @@ import { ConfirmDialog } from 'primeng/confirmdialog';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { UserService } from '../../../core/services/user.service';
 import type { Role, User } from '../../../core/models/user.model';
+import { PROCESS_AREAS } from '../../../core/constants/process-area.constant';
 
 /** Severity levels accepted by PrimeNG's <p-tag> component. */
 type TagSeverity = 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast';
@@ -91,6 +92,7 @@ export class UserListComponent implements OnInit {
     email: ['', [Validators.required, Validators.email]],
     password: [''],
     role_id: [null as number | null, Validators.required],
+    assigned_processes: [[] as string[], [Validators.required]],
   });
 
   // Filter state
@@ -105,6 +107,9 @@ export class UserListComponent implements OnInit {
   selectedStatus: boolean | null = null;
 
   // Dropdown option lists
+
+  /** Available process/area options for user assignment. */
+  readonly processAreaOptions = PROCESS_AREAS;
 
   /** Role options derived from UserService signals after loadRoles(). */
   get roleOptions(): FilterOption<string | null>[] {
@@ -147,7 +152,13 @@ export class UserListComponent implements OnInit {
    * Resets the form, sets password as required, and clears edit state.
    */
   openCreateDialog(): void {
-    this.userForm.reset();
+    this.userForm.reset({
+      full_name: '',
+      email: '',
+      password: '',
+      role_id: null,
+      assigned_processes: [],
+    });
     this.userForm.controls.email.enable();
 
     // Password is required only when creating a new account.
@@ -180,6 +191,7 @@ export class UserListComponent implements OnInit {
       full_name: user.full_name,
       email: user.email,
       role_id: user.role_id,
+      assigned_processes: user.assigned_processes ?? [],
     });
 
     // Lock the email – it must not be changed after account creation.
@@ -214,13 +226,14 @@ export class UserListComponent implements OnInit {
 
     this.isSaving.set(true);
 
-    const { full_name, email, password, role_id } = this.userForm.getRawValue();
+    const { full_name, email, password, role_id, assigned_processes } = this.userForm.getRawValue();
     let result: { error: string | null };
 
     if (this.isEditMode()) {
       result = await this.userService.updateUser(this.selectedUserId()!, {
         full_name,
         role_id: role_id!,
+        assigned_processes: assigned_processes ?? [],
       });
     } else {
       result = await this.userService.createUser({
@@ -228,6 +241,7 @@ export class UserListComponent implements OnInit {
         password,
         full_name,
         role_id: role_id!,
+        assigned_processes: assigned_processes ?? [],
       });
     }
 

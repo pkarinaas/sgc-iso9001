@@ -1,4 +1,5 @@
 <p-toast />
+<p-confirmdialog [style]="{ width: '450px' }" />
 <section class="doc-list-page">
   <!-- Page header -->
   <header class="doc-list-header">
@@ -9,16 +10,18 @@
       </p>
     </div>
 
-    <button
-      id="btn-upload-document"
-      type="button"
-      pButton
-      class="btn-upload-document"
-      (click)="openUploadDialog()"
-    >
-      <i class="pi pi-upload" pButtonIcon></i>
-      <span pButtonLabel>Subir Documento</span>
-    </button>
+    @if (canViewActions()) {
+      <button
+        id="btn-upload-document"
+        type="button"
+        pButton
+        class="btn-upload-document"
+        (click)="openUploadDialog()"
+      >
+        <i class="pi pi-upload" pButtonIcon></i>
+        <span pButtonLabel>Subir Documento</span>
+      </button>
+    }
   </header>
 
   <!-- Error banner -->
@@ -33,7 +36,7 @@
   <div class="doc-list-table-card">
     <p-table
       #dt
-      [value]="documentService.documents()"
+      [value]="displayedDocuments"
       [loading]="documentService.loading()"
       [paginator]="true"
       [rows]="10"
@@ -46,49 +49,55 @@
     >
       <!-- Caption: global search -->
       <ng-template #caption>
-        <div class="doc-list-filters flex flex-wrap items-center gap-4">
+        <div class="doc-list-filters">
           <!-- Global text search -->
-          <p-iconfield class="doc-list-filters__search flex-1 min-w-[240px]">
+          <p-iconfield class="doc-list-filters__search">
             <p-inputicon styleClass="pi pi-search" />
             <input
               id="input-doc-global-search"
               pInputText
+              pSize="small"
               type="text"
               [value]="globalFilterValue()"
               (input)="onGlobalFilter($event)"
               placeholder="Buscar por título o código..."
-              class="w-full h-[42px]"
-              [style.height.px]="42"
             />
           </p-iconfield>
 
           <!-- Status filter -->
           <p-select
+            #statusSelect
+            id="select-doc-status-filter"
+            size="small"
             [options]="statusOptions"
+            [(ngModel)]="selectedStatus"
+            (onChange)="onStatusChange($event, dt, statusSelect)"
             optionLabel="label"
             optionValue="value"
             placeholder="Filtrar por estado"
-            (onChange)="onStatusChange($event, dt)"
-            class="w-full md:w-52 h-[42px]"
-            [style.height.px]="42"
+            [showClear]="true"
+            class="doc-list-filters__select"
             appendTo="body"
-          ></p-select>
+          />
 
-          <!-- Date range filter -->
+          <!-- Date range filter: Desde -->
           <p-datepicker
+            id="datepicker-doc-start"
+            size="small"
             [(ngModel)]="startDate"
             dateFormat="dd/mm/yy"
             [showClear]="true"
             placeholder="Desde"
             (onSelect)="onDateFilterChange(dt)"
             (onClear)="onDateFilterChange(dt)"
-            class="w-full md:w-48 h-[42px]"
-            inputStyleClass="h-[42px]"
-            [inputStyle]="datePickerInputStyle"
-            [style.height.px]="42"
+            class="doc-list-filters__date"
             appendTo="body"
           ></p-datepicker>
+
+          <!-- Date range filter: Hasta -->
           <p-datepicker
+            id="datepicker-doc-end"
+            size="small"
             [(ngModel)]="endDate"
             dateFormat="dd/mm/yy"
             [showClear]="true"
@@ -96,10 +105,7 @@
             [minDate]="startDate"
             (onSelect)="onDateFilterChange(dt)"
             (onClear)="onDateFilterChange(dt)"
-            class="w-full md:w-48 h-[42px]"
-            inputStyleClass="h-[42px]"
-            [inputStyle]="datePickerInputStyle"
-            [style.height.px]="42"
+            class="doc-list-filters__date"
             appendTo="body"
           ></p-datepicker>
         </div>
@@ -148,32 +154,80 @@
 
           <!-- Action buttons -->
           <td class="col-actions">
-            <!-- Download -->
-            <button
-              [id]="'btn-download-' + doc.id"
-              type="button"
-              pButton
-              [text]="true"
-              [rounded]="true"
-              severity="secondary"
-              title="Descargar documento"
-              [disabled]="!doc.file_url"
-            >
-              <i class="pi pi-download"></i>
-            </button>
+            <div class="flex flex-row items-center justify-center gap-2 whitespace-nowrap">
+              <!-- Edit (Admin only) -->
+              @if (isAdmin) {
+                <button
+                  [id]="'btn-edit-' + doc.id"
+                  type="button"
+                  pButton
+                  icon="pi pi-pencil"
+                  class="p-button-rounded p-button-text p-button-sm"
+                  pTooltip="Editar documento"
+                  (click)="openEditDocumentModal(doc)"
+                >
+                  <i class="pi pi-pencil"></i>
+                </button>
+              }
 
-            <!-- View -->
-            <button
-              [id]="'btn-view-' + doc.id"
-              type="button"
-              pButton
-              [text]="true"
-              [rounded]="true"
-              severity="info"
-              title="Ver documento"
-            >
-              <i class="pi pi-eye"></i>
-            </button>
+              <!-- Download -->
+              <button
+                [id]="'btn-download-' + doc.id"
+                type="button"
+                pButton
+                class="p-button-secondary p-button-text p-button-rounded p-button-sm"
+                pTooltip="Descargar documento"
+                (click)="onDownload(doc)"
+                [disabled]="!doc.file_url || downloadingDocId === doc.id"
+              >
+                <i
+                  [class]="downloadingDocId === doc.id ? 'pi pi-spin pi-spinner' : 'pi pi-download'"
+                ></i>
+              </button>
+
+              <!-- View -->
+              <button
+                [id]="'btn-view-' + doc.id"
+                type="button"
+                pButton
+                class="p-button-info p-button-text p-button-rounded p-button-sm"
+                pTooltip="Ver documento"
+                (click)="openPdfViewer(doc)"
+                [disabled]="!doc.file_url || isLoadingPdf"
+              >
+                <i [class]="loadingPdfId === doc.id ? 'pi pi-spin pi-spinner' : 'pi pi-eye'"></i>
+              </button>
+
+              <!-- Change Status (role-based) -->
+              @if (canChangeStatus(doc)) {
+                <button
+                  [id]="'btn-status-' + doc.id"
+                  type="button"
+                  pButton
+                  icon="pi pi-sync"
+                  (click)="openStatusModal(doc)"
+                  class="p-button-secondary p-button-text p-button-rounded p-button-sm"
+                  pTooltip="Cambiar Estado"
+                >
+                  <i class="pi pi-sync"></i>
+                </button>
+              }
+
+              <!-- Delete (only for DRAFT and REVIEWED documents) -->
+              @if (canDelete(doc)) {
+                <button
+                  [id]="'btn-delete-' + doc.id"
+                  type="button"
+                  pButton
+                  icon="pi pi-trash"
+                  (click)="confirmDelete(doc)"
+                  class="p-button-danger p-button-text p-button-rounded p-button-sm"
+                  pTooltip="Eliminar documento"
+                >
+                  <i class="pi pi-trash"></i>
+                </button>
+              }
+            </div>
           </td>
         </tr>
       </ng-template>
@@ -235,32 +289,28 @@
       />
     </div>
 
-    <!-- Numeric input for Version -->
+    <!-- Process dropdown -->
     <div class="doc-form-field">
-      <label for="input-doc-version" class="doc-form-label">
-        Versión <span class="required-mark">*</span>
+      <label for="select-doc-area" class="doc-form-label">
+        Proceso <span class="required-mark">*</span>
       </label>
-      <input
-        id="input-doc-version"
-        type="text"
-        pInputText
-        formControlName="version"
-        placeholder="00"
-        class="doc-form-input"
-        inputmode="numeric"
-        maxlength="10"
+      <p-select
+        id="select-doc-area"
+        formControlName="process_area"
+        [options]="processAreaOptions"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Seleccione el proceso"
+        class="w-full doc-form-select"
         [class.ng-invalid]="
-          documentForm.controls.version.invalid && documentForm.controls.version.touched
+          documentForm.controls.process_area.invalid && documentForm.controls.process_area.touched
         "
-      />
-      @if (documentForm.controls.version.invalid && documentForm.controls.version.touched) {
-        <small class="doc-form-error">
-          @if (documentForm.controls.version.errors?.['required']) {
-            La versión es obligatoria.
-          } @else if (documentForm.controls.version.errors?.['pattern']) {
-            La versión debe ser numérica (ej. 00, 01).
-          }
-        </small>
+      ></p-select>
+      @if (
+        documentForm.controls.process_area.invalid && documentForm.controls.process_area.touched
+      ) {
+        <small class="doc-form-error">El proceso es obligatorio.</small>
       }
     </div>
 
@@ -313,4 +363,203 @@
       </button>
     </div>
   </form>
+</p-dialog>
+
+<!-- Edit Document Dialog Modal -->
+<p-dialog
+  [(visible)]="isEditModalVisible"
+  [modal]="true"
+  [style]="{ width: '450px' }"
+  header="Editar Documento"
+  [closable]="true"
+  (onHide)="closeEditDocumentModal()"
+>
+  <form [formGroup]="editDocumentForm" (ngSubmit)="saveEditDocument()" class="doc-dialog-form">
+    <!-- Title input -->
+    <div class="doc-form-field">
+      <label for="input-edit-doc-title" class="doc-form-label">
+        Título <span class="required-mark">*</span>
+      </label>
+      <input
+        id="input-edit-doc-title"
+        type="text"
+        pInputText
+        formControlName="title"
+        placeholder="Ej. Manual de Calidad"
+        class="doc-form-input"
+        [class.ng-invalid]="
+          editDocumentForm.controls.title.invalid && editDocumentForm.controls.title.touched
+        "
+      />
+      @if (editDocumentForm.controls.title.invalid && editDocumentForm.controls.title.touched) {
+        <small class="doc-form-error">El título es obligatorio.</small>
+      }
+    </div>
+
+    <!-- Code input -->
+    <div class="doc-form-field">
+      <label for="input-edit-doc-code" class="doc-form-label"> Código </label>
+      <input
+        id="input-edit-doc-code"
+        type="text"
+        pInputText
+        formControlName="code"
+        placeholder="Ej. SGC-MAN-001"
+        class="doc-form-input"
+      />
+    </div>
+
+    <!-- Process dropdown -->
+    <div class="doc-form-field">
+      <label for="select-edit-doc-area" class="doc-form-label">
+        Proceso <span class="required-mark">*</span>
+      </label>
+      <p-select
+        id="select-edit-doc-area"
+        formControlName="process_area"
+        [options]="processAreaOptions"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Seleccione el proceso"
+        class="w-full doc-form-select"
+        [class.ng-invalid]="
+          editDocumentForm.controls.process_area.invalid &&
+          editDocumentForm.controls.process_area.touched
+        "
+      ></p-select>
+      @if (
+        editDocumentForm.controls.process_area.invalid &&
+        editDocumentForm.controls.process_area.touched
+      ) {
+        <small class="doc-form-error">El proceso es obligatorio.</small>
+      }
+    </div>
+
+    <!-- Dialog footer with Cancel and Save buttons -->
+    <div class="doc-form-actions">
+      <button
+        id="btn-edit-dialog-cancel"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        (click)="closeEditDocumentModal()"
+        [disabled]="isSubmittingEdit"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button
+        id="btn-edit-dialog-save"
+        type="submit"
+        pButton
+        severity="primary"
+        [loading]="isSubmittingEdit"
+        [disabled]="editDocumentForm.invalid || isSubmittingEdit"
+      >
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </form>
+</p-dialog>
+
+<!-- Change Status Dialog Modal -->
+<p-dialog
+  [(visible)]="isStatusModalVisible"
+  [modal]="true"
+  [style]="{ width: '400px' }"
+  header="Cambiar Estado del Documento"
+  [closable]="true"
+  (onHide)="closeStatusModal()"
+>
+  <div class="doc-dialog-form">
+    @if (documentToChange) {
+      <div class="mb-3 text-sm text-gray-600">
+        <p class="m-0 mb-1">
+          <span class="font-semibold text-gray-700">Documento:</span>
+          {{ documentToChange.title }}
+        </p>
+        <p class="m-0">
+          <span class="font-semibold text-gray-700">Estado actual:</span>
+          <span class="sgc-badge ml-1" [attr.data-status]="documentToChange.status">
+            <span class="sgc-status__dot"></span>
+            {{ getStatusLabel(documentToChange.status) }}
+          </span>
+        </p>
+      </div>
+    }
+
+    <div class="doc-form-field">
+      <label for="select-new-status" class="doc-form-label">
+        Nuevo Estado <span class="required-mark">*</span>
+      </label>
+      <p-select
+        id="select-new-status"
+        [(ngModel)]="selectedNewStatus"
+        [options]="availableStates"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Seleccionar nuevo estado"
+        class="w-full"
+        appendTo="body"
+      />
+    </div>
+  </div>
+
+  <ng-template #footer pTemplate="footer">
+    <div class="doc-form-actions">
+      <button
+        id="btn-cancel-status"
+        type="button"
+        pButton
+        [text]="true"
+        severity="secondary"
+        class="p-button-text p-button-secondary"
+        (click)="closeStatusModal()"
+        [disabled]="isUpdatingStatus"
+      >
+        <span pButtonLabel>Cancelar</span>
+      </button>
+      <button
+        id="btn-save-status"
+        type="button"
+        pButton
+        class="doc-dialog-btn-save"
+        (click)="saveStatus()"
+        [loading]="isUpdatingStatus"
+        [disabled]="!selectedNewStatus || isUpdatingStatus"
+      >
+        <span pButtonLabel>Guardar</span>
+      </button>
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- PDF Viewer Dialog Modal -->
+<p-dialog
+  [(visible)]="isPdfViewerVisible"
+  [modal]="true"
+  [maximizable]="true"
+  [style]="{ width: '90vw' }"
+  header="Visor de Documentos"
+  [closable]="true"
+  (onHide)="closePdfViewer()"
+>
+  @if (currentPdfUrl) {
+    <ngx-extended-pdf-viewer
+      [src]="currentPdfUrl"
+      [textLayer]="true"
+      [showHandToolButton]="true"
+      [showPrintButton]="false"
+      [showDownloadButton]="false"
+      [supportsDownloading]="false"
+      [ignoreKeys]="pdfViewerIgnoreKeys"
+      [contextMenuAllowed]="false"
+      [showOpenFileButton]="false"
+      [showSecondaryToolbarButton]="false"
+      [showEditorButtons]="false"
+      [enablePrint]="false"
+      [height]="'80vh'"
+    ></ngx-extended-pdf-viewer>
+  }
 </p-dialog>

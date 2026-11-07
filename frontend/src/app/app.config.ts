@@ -8,6 +8,7 @@ import {
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { PrimeNG, PRIME_NG_CONFIG } from 'primeng/config';
+import { MessageService } from 'primeng/api';
 import Aura from '@primeng/themes/aura';
 import { definePreset } from '@primeuix/themes';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -21,10 +22,10 @@ const SgcPreset = definePreset(Aura, {
       200: '{rose.200}',
       300: '{rose.300}',
       400: '{rose.400}',
-      500: '{rose.600}',
-      600: '{rose.700}',
-      700: '{rose.800}',
-      800: '{rose.900}',
+      500: '{rose.900}',
+      600: '{rose.900}',
+      700: '{rose.950}',
+      800: '{rose.950}',
       900: '{rose.950}',
       950: '{rose.950}',
     },
@@ -48,6 +49,7 @@ const primeNGConfig = {
 
 export const appConfig: ApplicationConfig = {
   providers: [
+    MessageService,
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
     provideAnimationsAsync(),

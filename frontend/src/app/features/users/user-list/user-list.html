@@ -322,6 +322,34 @@
       }
     </div>
 
+    <!-- Assigned Processes -->
+    <div class="user-form-field">
+      <label for="select-assigned-processes" class="user-form-label">
+        Procesos Asignados <span class="required-mark">*</span>
+      </label>
+      <p-select
+        id="select-assigned-processes"
+        formControlName="assigned_processes"
+        [options]="processAreaOptions"
+        optionLabel="label"
+        optionValue="value"
+        [multiple]="true"
+        display="chip"
+        appendTo="body"
+        placeholder="Seleccione los procesos"
+        class="w-full user-process-multiselect"
+        [class.ng-invalid]="
+          userForm.controls.assigned_processes.invalid &&
+          userForm.controls.assigned_processes.touched
+        "
+      ></p-select>
+      @if (
+        userForm.controls.assigned_processes.invalid && userForm.controls.assigned_processes.touched
+      ) {
+        <small class="user-form-error">Seleccione al menos un proceso asignado.</small>
+      }
+    </div>
+
     <!-- Submit button -->
     <div class="user-form-actions">
       <button
@@ -335,7 +363,14 @@
       >
         <span pButtonLabel>Cancelar</span>
       </button>
-      <button id="btn-dialog-save" type="submit" pButton severity="primary" [loading]="isSaving()">
+      <button
+        id="btn-dialog-save"
+        type="submit"
+        pButton
+        severity="primary"
+        [loading]="isSaving()"
+        [disabled]="userForm.invalid || isSaving()"
+      >
         <span pButtonLabel>Guardar</span>
       </button>
     </div>

@@ -6,7 +6,7 @@
   --sgc-surface: #ffffff;
 
   /* Brand colours */
-  --sgc-primary: #be123c;
+  --sgc-primary: #881337;
   --sgc-primary-hover: #9f1239;
   --sgc-accent-soft: #ffe4e6;
 
@@ -16,6 +16,13 @@
   /* Typography */
   --sgc-text-primary: #1e293b;
   --sgc-text-secondary: #64748b;
+
+  /* Checkbox tokens */
+  --p-checkbox-checked-background: #881337;
+  --p-checkbox-checked-border-color: #881337;
+  --p-checkbox-checked-hover-background: #9f1239;
+  --p-checkbox-checked-hover-border-color: #9f1239;
+  --p-checkbox-focus-ring-color: rgba(136, 19, 55, 0.2);
 }
 
 *,
@@ -42,4 +49,321 @@ body {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Core Layout Utilities */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-row {
+  flex-direction: row;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.items-center,
+.align-items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.h-screen {
+  height: 100vh;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.w-64 {
+  width: 16rem;
+  min-width: 16rem;
+  max-width: 16rem;
+  flex-shrink: 0;
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+.bg-gray-50 {
+  background-color: #f9fafb;
+}
+
+.bg-white {
+  background-color: #ffffff;
+}
+
+.bg-surface-50 {
+  background-color: var(--p-surface-50, #f8fafc);
+}
+
+.border-r {
+  border-right-width: 1px;
+  border-right-style: solid;
+}
+
+.border-t,
+.border-top-1 {
+  border-top-width: 1px;
+  border-top-style: solid;
+}
+
+.border-gray-200,
+.surface-border {
+  border-color: var(--p-content-border-color, #e5e7eb);
+}
+
+.p-3 {
+  padding: 0.75rem;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.mt-3 {
+  margin-top: 0.75rem;
+}
+
+.ml-auto {
+  margin-left: auto;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-3 {
+  gap: 0.75rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.transition-colors {
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.tracking-tight {
+  letter-spacing: -0.025em;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-gray-600,
+.text-color-secondary {
+  color: var(--p-text-muted-color, #64748b);
+}
+
+.text-\[\#800020\] {
+  color: #800020;
+}
+
+.hover\:bg-gray-100:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.hover\:bg-rose-50:hover {
+  background-color: #fff1f2;
+}
+
+.\!bg-rose-50,
+.router-link-active {
+  background-color: #fff1f2 !important;
+}
+
+.\!text-\[\#800020\],
+.router-link-active {
+  color: #800020 !important;
+  font-weight: 600;
+}
+
+/* Primary button */
+.p-button-primary,
+button[severity='primary']:not([text='true']) {
+  background-color: #881337;
+  border-color: #881337;
+  color: #ffffff;
+}
+
+.p-button-primary:hover:not(:disabled),
+button[severity='primary']:not([text='true']):hover:not(:disabled) {
+  background-color: #9f1239;
+  border-color: #9f1239;
+}
+
+.p-button-primary:disabled,
+button[severity='primary']:disabled {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+}
+
+button[pButton] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* Checkbox */
+.p-checkbox-checked .p-checkbox-box,
+.p-checkbox.p-checkbox-checked .p-checkbox-box,
+.p-checkbox[data-p-checked="true"] .p-checkbox-box,
+.p-checkbox-box[data-p-checked="true"] {
+  background-color: #881337 !important;
+  border-color: #881337 !important;
+}
+
+.p-checkbox-checked:not(.p-disabled):hover .p-checkbox-box,
+.p-checkbox.p-checkbox-checked:not(.p-disabled):hover .p-checkbox-box {
+  background-color: #9f1239 !important;
+  border-color: #9f1239 !important;
+}
+
+.p-checkbox:not(.p-disabled):has(.p-checkbox-input:focus-visible) .p-checkbox-box,
+.p-checkbox.p-checkbox-focused .p-checkbox-box {
+  border-color: #881337 !important;
+  box-shadow: 0 0 0 0.2rem rgba(136, 19, 55, 0.2) !important;
+}
+
+/* Select dropdown overlay & option styling matching design */
+.p-select-overlay .p-select-option,
+.p-select-list .p-select-option,
+.p-select-overlay .p-select-option .p-select-option-label,
+.p-select-list .p-select-option .p-select-option-label,
+.p-multiselect-overlay .p-multiselect-option,
+.p-multiselect-list .p-multiselect-option,
+.p-multiselect-overlay .p-multiselect-option .p-multiselect-option-label,
+.p-multiselect-list .p-multiselect-option .p-multiselect-option-label {
+  font-size: 0.8125rem !important;
+  padding: 0.4rem 0.75rem !important;
+}
+
+.p-select-overlay .p-select-option.p-select-option-selected,
+.p-select-overlay .p-select-option[aria-selected='true'],
+.p-select-list .p-select-option.p-select-option-selected,
+.p-select-list .p-select-option[aria-selected='true'],
+.p-multiselect-overlay .p-multiselect-option.p-multiselect-option-selected,
+.p-multiselect-overlay .p-multiselect-option[aria-selected='true'],
+.p-multiselect-list .p-multiselect-option.p-multiselect-option-selected,
+.p-multiselect-list .p-multiselect-option[aria-selected='true'] {
+  background-color: #fff1f2 !important;
+  color: #881337 !important;
+  font-weight: 500 !important;
+}
+
+.p-select-overlay .p-select-option:not(.p-select-option-selected):hover,
+.p-select-list .p-select-option:not(.p-select-option-selected):hover,
+.p-multiselect-overlay .p-multiselect-option:not(.p-multiselect-option-selected):hover,
+.p-multiselect-list .p-multiselect-option:not(.p-multiselect-option-selected):hover {
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
+}
+
+/* Confirm Dialog buttons */
+.p-confirmdialog .p-confirmdialog-reject-button,
+.btn-confirm-cancel {
+  background: transparent !important;
+  border: none !important;
+  color: #475569 !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  border-radius: 6px !important;
+  padding: 0.45rem 1rem !important;
+  transition: all 0.15s ease !important;
+  box-shadow: none !important;
+}
+
+.p-confirmdialog .p-confirmdialog-reject-button:hover,
+.btn-confirm-cancel:hover {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border: none !important;
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button,
+.btn-confirm-accept {
+  background-color: #881337 !important;
+  border: 1px solid #881337 !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  border-radius: 6px !important;
+  padding: 0.45rem 1rem !important;
+  transition: all 0.15s ease !important;
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button:hover:not(:disabled),
+.btn-confirm-accept:hover:not(:disabled) {
+  background-color: #9f1239 !important;
+  border-color: #9f1239 !important;
+  color: #ffffff !important;
+}
+
+/* Inactivity Dialog clean button without double borders */
+.p-dialog-footer .p-button,
+p-dialog .p-button.border-none {
+  border: none !important;
+  outline: none !important;
 }
