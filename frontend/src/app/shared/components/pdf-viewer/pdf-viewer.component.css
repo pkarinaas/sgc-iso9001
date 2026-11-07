@@ -1,2 +1,17 @@
 /* Reusable PDF viewer styles */
+:host ::ng-deep .p-checkbox-checked .p-checkbox-box,
+:host ::ng-deep .p-checkbox.p-checkbox-checked .p-checkbox-box,
+:host ::ng-deep .p-checkbox[data-p-checked="true"] .p-checkbox-box,
+:host ::ng-deep .p-checkbox-box[data-p-checked="true"] {
+  background-color: #881337 !important;
+  border-color: #881337 !important;
+}
 
+:host ::ng-deep .p-checkbox:not(.p-disabled):has(.p-checkbox-input:hover) .p-checkbox-box {
+  border-color: #881337 !important;
+}
+
+:host ::ng-deep .p-checkbox:not(.p-disabled):has(.p-checkbox-input:focus-visible) .p-checkbox-box {
+  border-color: #881337 !important;
+  box-shadow: 0 0 0 0.2rem rgba(136, 19, 55, 0.2) !important;
+}

@@ -20,5 +20,16 @@ export class DashboardService {
   async getPendingDocuments(userId: string, userAreas: string[]): Promise<Document[]> {
     return this.documentService.getPendingDocuments(userId, userAreas);
   }
+
+  /**
+   * Records a user's mandatory reading acknowledgement for a document.
+   *
+   * @param documentId - UUID or ID of the document.
+   * @param userId - UUID of the user.
+   * @returns Supabase response.
+   */
+  async acknowledgeDocument(documentId: string | number, userId: string): Promise<any> {
+    return this.documentService.acknowledgeDocument(documentId, userId);
+  }
 }
 

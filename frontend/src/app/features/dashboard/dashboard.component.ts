@@ -13,14 +13,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
 import { ButtonDirective } from 'primeng/button';
-import { Checkbox } from 'primeng/checkbox';
 import { CardModule } from 'primeng/card';
 import { TagModule } from 'primeng/tag';
-import { DialogModule } from 'primeng/dialog';
 import { Tooltip } from 'primeng/tooltip';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
-import { NgxExtendedPdfViewerModule } from 'ngx-extended-pdf-viewer';
+import { PdfViewerComponent } from '../../shared/components/pdf-viewer/pdf-viewer.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DocumentService } from '../../core/services/document.service';
 import { DashboardService } from '../../core/services/dashboard.service';
@@ -42,13 +40,11 @@ import type { User } from '../../core/models/user.model';
     FormsModule,
     TableModule,
     ButtonDirective,
-    Checkbox,
     CardModule,
     TagModule,
-    DialogModule,
     Tooltip,
     ToastModule,
-    NgxExtendedPdfViewerModule,
+    PdfViewerComponent,
   ],
 })
 export class DashboardComponent implements OnInit {
@@ -63,6 +59,9 @@ export class DashboardComponent implements OnInit {
 
   /** List of approved documents pending mandatory reading acknowledgement. */
   pendingDocuments: Document[] = [];
+
+  /** Currently selected document for viewing or acknowledgement. */
+  selectedDocument: Document | null = null;
 
   /** Loading state indicator. */
   readonly isLoading = signal<boolean>(false);
@@ -132,6 +131,22 @@ export class DashboardComponent implements OnInit {
   }
 
   /**
+   * Refreshes the list of pending documents for the current user.
+   */
+  async getPendingDocuments(): Promise<void> {
+    await this.loadPendingDocuments();
+  }
+
+  /**
+   * Handles mandatory reading acknowledgement completion.
+   * Closes the viewer and refreshes the pending reading documents list.
+   */
+  async onDocumentAcknowledged(): Promise<void> {
+    this.closePdfViewer();
+    await this.getPendingDocuments();
+  }
+
+  /**
    * Formats a version number or string to match the repository standard, e.g. 'v00', 'v01'.
    *
    * @param version - The version string or number.
@@ -169,6 +184,7 @@ export class DashboardComponent implements OnInit {
       return;
     }
 
+    this.selectedDocument = doc;
     this.requiresAcknowledgement = requiresAcknowledgement;
     this.acknowledgementChecked = false;
     this.isLoadingPdf = true;
@@ -206,14 +222,30 @@ export class DashboardComponent implements OnInit {
 
   /**
    * Confirms mandatory reading acknowledgement for the active document.
-   * Emits the acknowledge event and closes the PDF viewer modal.
+   * Emits the acknowledge event, persists acknowledgement, and refreshes pending documents.
    */
-  confirmAcknowledgement(): void {
+  async confirmAcknowledgement(): Promise<void> {
     if (!this.acknowledgementChecked) {
       return;
     }
+    if (this.selectedDocument?.id && this.currentUser()?.id) {
+      try {
+        await this.documentService.acknowledgeDocument(
+          this.selectedDocument.id,
+          this.currentUser()!.id,
+        );
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Éxito',
+          detail: 'Lectura confirmada correctamente',
+          life: 4000,
+        });
+      } catch (error) {
+        console.error('Error confirming document acknowledgement:', error);
+      }
+    }
     this.acknowledge.emit();
-    this.closePdfViewer();
+    await this.onDocumentAcknowledged();
   }
 
   /**
@@ -222,6 +254,7 @@ export class DashboardComponent implements OnInit {
   closePdfViewer(): void {
     this.isPdfViewerVisible = false;
     this.currentPdfUrl = null;
+    this.selectedDocument = null;
     this.acknowledgementChecked = false;
     this.requiresAcknowledgement = false;
     this.cdr.markForCheck();

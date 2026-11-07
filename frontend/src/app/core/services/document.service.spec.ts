@@ -420,4 +420,48 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       expect(pending[0].id).toBe(101);
     });
   });
+
+  describe('acknowledgeDocument (SCRUM-60)', () => {
+    it('should throw error if documentId or userId is missing', async () => {
+      await expect(service.acknowledgeDocument('', 'usr-1')).rejects.toThrow(
+        'Faltan datos obligatorios para confirmar la lectura.',
+      );
+      await expect(service.acknowledgeDocument('doc-101', '')).rejects.toThrow(
+        'Faltan datos obligatorios para confirmar la lectura.',
+      );
+    });
+
+    it('should insert into document_acknowledgements table and return data', async () => {
+      const mockInserted = [{ id: 'ack-1', document_id: 'doc-101', user_id: 'usr-1' }];
+      const mockQueryBuilder = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({ data: mockInserted, error: null }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      const result = await service.acknowledgeDocument('doc-101', 'usr-1');
+
+      expect(supabase.from).toHaveBeenCalledWith('document_acknowledgements');
+      expect(mockQueryBuilder.insert).toHaveBeenCalledWith({
+        document_id: 'doc-101',
+        user_id: 'usr-1',
+      });
+      expect(result).toEqual(mockInserted);
+    });
+
+    it('should throw translated error when database insert fails', async () => {
+      const mockQueryBuilder = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'row-level security policy violated' },
+        }),
+      };
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+
+      await expect(service.acknowledgeDocument('doc-101', 'usr-1')).rejects.toThrow(
+        'No tienes permisos para realizar esta operación en la base de datos.',
+      );
+    });
+  });
 });

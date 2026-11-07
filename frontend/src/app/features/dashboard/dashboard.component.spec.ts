@@ -56,6 +56,7 @@ describe('DashboardComponent', () => {
   let mockDocumentService: {
     getPendingDocuments: ReturnType<typeof vi.fn>;
     getSignedDocumentUrl: ReturnType<typeof vi.fn>;
+    acknowledgeDocument: ReturnType<typeof vi.fn>;
   };
 
   let mockDashboardService: {
@@ -70,6 +71,7 @@ describe('DashboardComponent', () => {
     mockDocumentService = {
       getPendingDocuments: vi.fn().mockResolvedValue([...mockPendingDocs]),
       getSignedDocumentUrl: vi.fn().mockResolvedValue('https://storage.supabase.com/signed/test.pdf'),
+      acknowledgeDocument: vi.fn().mockResolvedValue({ id: 1 }),
     };
 
     mockDashboardService = {
@@ -258,7 +260,7 @@ describe('DashboardComponent', () => {
       await component.openReader(mockPendingDocs[0], true);
       component.acknowledgementChecked = true;
 
-      component.confirmAcknowledgement();
+      await component.confirmAcknowledgement();
 
       expect(acknowledgeSpy).toHaveBeenCalled();
       expect(closeSpy).toHaveBeenCalled();
@@ -271,7 +273,7 @@ describe('DashboardComponent', () => {
       await component.openReader(mockPendingDocs[0], true);
       component.acknowledgementChecked = false;
 
-      component.confirmAcknowledgement();
+      await component.confirmAcknowledgement();
 
       expect(acknowledgeSpy).not.toHaveBeenCalled();
       expect(component.isPdfViewerVisible).toBe(true);
@@ -286,6 +288,48 @@ describe('DashboardComponent', () => {
       expect(component.isPdfViewerVisible).toBe(false);
       expect(component.acknowledgementChecked).toBe(false);
       expect(component.requiresAcknowledgement).toBe(false);
+    });
+  });
+
+  describe('Document Acknowledgement & Auto-Refresh (SCRUM-60)', () => {
+    it('should refresh pending documents when onDocumentAcknowledged is triggered', async () => {
+      const closeSpy = vi.spyOn(component, 'closePdfViewer');
+      const getPendingSpy = vi.spyOn(component, 'getPendingDocuments');
+
+      // First call was on ngOnInit. Now simulating reading completion for doc-1
+      mockDocumentService.getPendingDocuments.mockResolvedValueOnce([mockPendingDocs[1]]);
+
+      await component.onDocumentAcknowledged();
+
+      expect(closeSpy).toHaveBeenCalled();
+      expect(getPendingSpy).toHaveBeenCalled();
+      expect(component.pendingDocuments.length).toBe(1);
+      expect(component.pendingDocuments[0].id).toBe('doc-2');
+    });
+
+    it('should call acknowledgeDocument and refresh pending list on confirmAcknowledgement', async () => {
+      const toastSpy = vi.spyOn(component.messageService, 'add');
+      await component.openReader(mockPendingDocs[0], true);
+      component.acknowledgementChecked = true;
+
+      mockDocumentService.getPendingDocuments.mockResolvedValueOnce([mockPendingDocs[1]]);
+
+      await component.confirmAcknowledgement();
+
+      expect(mockDocumentService.acknowledgeDocument).toHaveBeenCalledWith(
+        mockPendingDocs[0].id,
+        mockUser.id,
+      );
+      expect(toastSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'success',
+          summary: 'Éxito',
+          detail: 'Lectura confirmada correctamente',
+        }),
+      );
+      expect(component.pendingDocuments.length).toBe(1);
+      expect(component.pendingDocuments[0].id).toBe('doc-2');
+      expect(component.isPdfViewerVisible).toBe(false);
     });
   });
 

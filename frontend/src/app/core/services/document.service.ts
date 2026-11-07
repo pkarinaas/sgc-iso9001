@@ -17,6 +17,9 @@ export class DocumentService {
   private readonly _loading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
 
+  /** Direct Supabase client instance reference. */
+  readonly supabase = supabase;
+
   /** List of documents returned by the last successful `loadDocuments()` call. */
   readonly documents = this._documents.asReadonly();
 
@@ -133,6 +136,34 @@ export class DocumentService {
     );
 
     return (approvedDocs as Document[]).filter((doc) => !ackDocIds.has(String(doc.id)));
+  }
+
+  /**
+   * Records a user's mandatory reading acknowledgement for a document in
+   * `public.document_acknowledgements`.
+   *
+   * @param documentId - The ID of the acknowledged document.
+   * @param userId - The ID of the acknowledging user.
+   * @returns Supabase response or inserted acknowledgement record.
+   * @throws Error if documentId or userId is missing or if DB insertion fails.
+   */
+  async acknowledgeDocument(documentId: string | number, userId: string): Promise<any> {
+    if (!documentId || !userId) {
+      throw new Error('Faltan datos obligatorios para confirmar la lectura.');
+    }
+
+    const { data, error } = await this.supabase
+      .from('document_acknowledgements')
+      .insert({ document_id: documentId, user_id: userId })
+      .select();
+
+    if (error) {
+      throw new Error(
+        `Error al registrar confirmación de lectura: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+
+    return data;
   }
 
   /**

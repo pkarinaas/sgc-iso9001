@@ -268,7 +268,9 @@ button[pButton] {
 
 /* Checkbox */
 .p-checkbox-checked .p-checkbox-box,
-.p-checkbox.p-checkbox-checked .p-checkbox-box {
+.p-checkbox.p-checkbox-checked .p-checkbox-box,
+.p-checkbox[data-p-checked="true"] .p-checkbox-box,
+.p-checkbox-box[data-p-checked="true"] {
   background-color: #881337 !important;
   border-color: #881337 !important;
 }
