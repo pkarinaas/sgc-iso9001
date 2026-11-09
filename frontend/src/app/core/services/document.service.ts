@@ -167,6 +167,24 @@ export class DocumentService {
   }
 
   /**
+   * Fetches aggregated metrics for the dashboard via the get_dashboard_metrics RPC.
+   *
+   * @returns Aggregated metrics payload containing documentsByStatus and totalAcknowledgements.
+   * @throws Error if the RPC execution fails.
+   */
+  async getDashboardMetrics(): Promise<any> {
+    const { data, error } = await this.supabase.rpc('get_dashboard_metrics');
+
+    if (error) {
+      throw new Error(
+        `Error al obtener métricas del dashboard: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+
+    return data;
+  }
+
+  /**
    * Uploads a PDF file to Supabase Storage (`sgc-files` bucket) and inserts a
    * new row in `public.documents` with the provided metadata.
    *
