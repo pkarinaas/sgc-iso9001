@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { BehaviorSubject } from 'rxjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { signal } from '@angular/core';
 import { AppLayoutComponent } from './app-layout.component';
 import { AuthService } from '../../services/auth.service';
 import { InactivityService } from '../../services/inactivity.service';
@@ -10,7 +11,12 @@ import { InactivityService } from '../../services/inactivity.service';
 describe('AppLayoutComponent', () => {
   let fixture: ComponentFixture<AppLayoutComponent>;
   let component: AppLayoutComponent;
-  let authServiceMock: { signOut: ReturnType<typeof vi.fn> };
+  let authServiceMock: {
+    signOut: ReturnType<typeof vi.fn>;
+    getCurrentUserProfile: ReturnType<typeof vi.fn>;
+    userRole: ReturnType<typeof signal<string | null>>;
+    currentUser: ReturnType<typeof signal<any>>;
+  };
   let warningSubject: BehaviorSubject<boolean>;
   let inactivityServiceMock: {
     isWarningVisible$: BehaviorSubject<boolean>;
@@ -24,6 +30,21 @@ describe('AppLayoutComponent', () => {
 
     authServiceMock = {
       signOut: vi.fn().mockResolvedValue(undefined),
+      getCurrentUserProfile: vi.fn().mockResolvedValue({
+        id: 'usr-123',
+        full_name: 'Juan Pérez',
+        email: 'juan@empresa.com',
+        role_id: 1,
+        roles: { id: 1, name: 'ADMIN', description: 'Administrador', created_at: '' },
+      }),
+      userRole: signal('ADMIN'),
+      currentUser: signal({
+        id: 'usr-123',
+        full_name: 'Juan Pérez',
+        email: 'juan@empresa.com',
+        role_id: 1,
+        roles: { id: 1, name: 'ADMIN', description: 'Administrador', created_at: '' },
+      }),
     };
 
     inactivityServiceMock = {
@@ -152,6 +173,12 @@ describe('AppLayoutComponent', () => {
     const mainEl = compiled.querySelector('main');
     expect(mainEl).toBeTruthy();
     expect(mainEl?.querySelector('router-outlet')).toBeTruthy();
+  });
+
+  it('should render TopbarComponent inside the layout container', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const topbarEl = compiled.querySelector('app-topbar');
+    expect(topbarEl).toBeTruthy();
   });
 
   it('should toggle sidebar visibility when toggle button is clicked', () => {

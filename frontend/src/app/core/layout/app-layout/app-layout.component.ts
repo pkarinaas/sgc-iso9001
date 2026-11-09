@@ -4,12 +4,14 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { DialogModule } from 'primeng/dialog';
 import { ButtonDirective } from 'primeng/button';
 import { Subscription } from 'rxjs';
+import { TopbarComponent } from '../topbar/topbar.component';
 import { AuthService } from '../../services/auth.service';
 import { InactivityService } from '../../services/inactivity.service';
 
 /**
  * AppLayoutComponent serves as the primary application layout for authenticated views.
  * It provides a collapsible lateral sidebar with navigation and session controls,
+ * a global Topbar hosting user profile info and header actions,
  * a dynamic main content area hosting the routed views via RouterOutlet,
  * and an inactivity warning modal dialog to prevent unexpected session terminations.
  */
@@ -23,6 +25,7 @@ import { InactivityService } from '../../services/inactivity.service';
     RouterLinkActive,
     DialogModule,
     ButtonDirective,
+    TopbarComponent,
   ],
   templateUrl: './app-layout.component.html',
   styleUrl: './app-layout.component.css',

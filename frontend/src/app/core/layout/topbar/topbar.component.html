@@ -1,0 +1,66 @@
+<header class="topbar-container" role="banner">
+  <!-- Left Side: Toggle button and Logo when sidebar is hidden -->
+  <div class="topbar-left">
+    @if (!isSidebarVisible) {
+      <button
+        id="btn-open-sidebar"
+        type="button"
+        (click)="onToggleSidebar()"
+        class="btn-hamburger"
+        title="Mostrar barra lateral"
+        aria-label="Mostrar barra lateral"
+      >
+        <i class="pi pi-bars text-xl"></i>
+      </button>
+      <span class="topbar-brand">SGC-ISO9001</span>
+    }
+  </div>
+
+  <!-- Right Side: Action buttons and User Profile -->
+  <div class="topbar-right">
+    <!-- Notification Bell Button -->
+    <button
+      id="btn-notifications"
+      type="button"
+      pButton
+      icon="pi pi-bell"
+      class="p-button-rounded p-button-text topbar-action-btn"
+      pTooltip="Notificaciones"
+      tooltipPosition="bottom"
+      aria-label="Notificaciones"
+      (click)="onNotificationsClick()"
+    >
+      <i class="pi pi-bell text-lg"></i>
+    </button>
+
+    <!-- Help / Tutorial Button -->
+    <button
+      id="btn-help"
+      type="button"
+      pButton
+      icon="pi pi-question-circle"
+      class="p-button-rounded p-button-text topbar-action-btn"
+      pTooltip="Ayuda"
+      tooltipPosition="bottom"
+      aria-label="Ayuda"
+      (click)="onHelpClick()"
+    >
+      <i class="pi pi-question-circle text-lg"></i>
+    </button>
+
+    <!-- User Information -->
+    <div class="user-profile-badge">
+      <div class="user-avatar" aria-hidden="true">
+        <i class="pi pi-user"></i>
+      </div>
+      <div class="user-details">
+        <span class="user-profile-text">
+          <span class="user-name">{{ userName() }}</span>
+          <span class="user-separator">|</span>
+          <span class="user-role">{{ userRole() }}</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</header>
+
