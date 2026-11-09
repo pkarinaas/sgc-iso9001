@@ -18,6 +18,18 @@ describe('DashboardService', () => {
       APPROVED: 8,
       OBSOLETE: 1,
     },
+    totalCompleted: 42,
+    totalPending: 8,
+    adherencePercentage: 84.0,
+    pendingDetails: [
+      {
+        documentTitle: 'Manual de Calidad ISO 9001:2015',
+        processArea: 'calidad',
+        pendingUsers: ['Ana Pérez', 'Carlos Gómez'],
+        documentId: 'doc-1',
+        code: 'MC-01',
+      },
+    ],
     totalAcknowledgements: 42,
     documents_by_status: {
       DRAFT: 3,
@@ -25,6 +37,18 @@ describe('DashboardService', () => {
       APPROVED: 8,
       OBSOLETE: 1,
     },
+    total_completed: 42,
+    total_pending: 8,
+    adherence_percentage: 84.0,
+    pending_details: [
+      {
+        documentTitle: 'Manual de Calidad ISO 9001:2015',
+        processArea: 'calidad',
+        pendingUsers: ['Ana Pérez', 'Carlos Gómez'],
+        documentId: 'doc-1',
+        code: 'MC-01',
+      },
+    ],
     total_acknowledgements: 42,
   };
 
@@ -58,7 +82,11 @@ describe('DashboardService', () => {
       expect(rpcSpy).toHaveBeenCalledWith('get_dashboard_metrics');
       expect(result).toEqual(mockMetrics);
       expect(result.documentsByStatus).toBeDefined();
-      expect(result.totalAcknowledgements).toBe(42);
+      expect(result.totalCompleted).toBe(42);
+      expect(result.totalPending).toBe(8);
+      expect(result.adherencePercentage).toBe(84.0);
+      expect(result.pendingDetails.length).toBe(1);
+      expect(result.pendingDetails[0].pendingUsers).toEqual(['Ana Pérez', 'Carlos Gómez']);
     });
 
     it('should throw an error when supabase.rpc returns an error object', async () => {

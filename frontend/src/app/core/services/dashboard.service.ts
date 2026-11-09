@@ -17,10 +17,11 @@ export class DashboardService {
   /**
    * Fetches aggregated metrics for the admin dashboard via the get_dashboard_metrics RPC.
    *
-   * @returns Aggregated metrics payload containing documentsByStatus and totalAcknowledgements.
+   * @returns Aggregated metrics payload containing documentsByStatus, totalCompleted,
+   *          totalPending, adherencePercentage, and pendingDetails.
    * @throws Error if the RPC execution fails.
    */
-  async getDashboardMetrics(): Promise<DashboardMetrics | any> {
+  async getDashboardMetrics(): Promise<DashboardMetrics> {
     const { data, error } = await this.supabase.rpc('get_dashboard_metrics');
 
     if (error) {
@@ -28,7 +29,7 @@ export class DashboardService {
       throw new Error(`Error al obtener métricas del dashboard: ${error.message}`);
     }
 
-    return data;
+    return data as DashboardMetrics;
   }
 
   /**
