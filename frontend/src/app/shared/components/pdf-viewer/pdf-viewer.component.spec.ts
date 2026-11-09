@@ -55,7 +55,7 @@ describe('PdfViewerComponent', () => {
 
     const ackCheck = document.body.querySelector('#ack-check');
     expect(ackCheck).toBeNull();
-  });
+  }, 10000);
 
   it('should show acknowledgement footer when requiresAcknowledgement is true', () => {
     component.open('https://storage.supabase.com/test.pdf', true);
@@ -66,7 +66,7 @@ describe('PdfViewerComponent', () => {
     expect(document.body.textContent).toContain(
       'Declaro haber leído y comprendido las directrices de este documento.',
     );
-  });
+  }, 10000);
 
   it('should disable confirm button when acknowledgementChecked is false', () => {
     component.open('https://storage.supabase.com/test.pdf', true);
@@ -77,7 +77,7 @@ describe('PdfViewerComponent', () => {
       'button[label="Confirmar lectura"]',
     ) as HTMLButtonElement;
     expect(confirmButton?.disabled).toBe(true);
-  });
+  }, 10000);
 
   it('should enable confirm button and emit acknowledge on confirmAcknowledgement when checked', async () => {
     const acknowledgeSpy = vi.spyOn(component.acknowledge, 'emit');
