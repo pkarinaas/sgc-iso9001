@@ -31,7 +31,7 @@ import { InactivityService } from '../../services/inactivity.service';
   styleUrl: './app-layout.component.css',
 })
 export class AppLayoutComponent implements OnInit, OnDestroy {
-  private readonly authService = inject(AuthService);
+  readonly authService = inject(AuthService);
   private readonly inactivityService = inject(InactivityService);
 
   /** Subscription to the inactivity warning visibility observable. */
@@ -46,12 +46,53 @@ export class AppLayoutComponent implements OnInit, OnDestroy {
   /** Signal reflecting whether the warning dialog is currently visible. */
   readonly isWarningVisible = signal(false);
 
-  ngOnInit(): void {
+  /** Signal holding the current user's role code. */
+  readonly userRole = signal<string | null>(null);
+
+  /**
+   * Indicates whether the currently authenticated user is an Administrator.
+   * Restricts sensitive navigation elements such as the "Usuarios" view.
+   */
+  get isAdmin(): boolean {
+    const role =
+      this.userRole() ??
+      (typeof this.authService.userRole === 'function' ? this.authService.userRole() : null) ??
+      (typeof this.authService.currentUser === 'function'
+        ? this.authService.currentUser()?.roles?.name
+        : null);
+
+    return role?.toUpperCase() === 'ADMIN';
+  }
+
+  async ngOnInit(): Promise<void> {
     this.inactivityService.startMonitoring();
 
     this.warningSubscription = this.inactivityService.isWarningVisible$.subscribe((visible) => {
       this.isWarningVisible.set(visible);
     });
+
+    await this.loadUserRole();
+  }
+
+  /**
+   * Retrieves the current user's role from AuthService.
+   */
+  async loadUserRole(): Promise<void> {
+    if (typeof this.authService.userRole === 'function' && this.authService.userRole()) {
+      this.userRole.set(this.authService.userRole());
+      return;
+    }
+
+    if (typeof this.authService.getUserRole === 'function') {
+      try {
+        const role = await this.authService.getUserRole();
+        if (role) {
+          this.userRole.set(role);
+        }
+      } catch (error) {
+        console.error('Error fetching user role in AppLayoutComponent:', error);
+      }
+    }
   }
 
   ngOnDestroy(): void {
