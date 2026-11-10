@@ -1,13 +1,17 @@
 import {
+  AfterViewInit,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   HostListener,
   inject,
   Input,
+  OnDestroy,
   OnInit,
   Output,
   signal,
+  ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -18,16 +22,22 @@ import { TagModule } from 'primeng/tag';
 import { Tooltip } from 'primeng/tooltip';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { ProgressBar } from 'primeng/progressbar';
+import { Chart } from 'chart.js/auto';
 import { PdfViewerComponent } from '../../shared/components/pdf-viewer/pdf-viewer.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DocumentService } from '../../core/services/document.service';
 import { DashboardService } from '../../core/services/dashboard.service';
 import type { Document } from '../../core/models/document.model';
 import type { User } from '../../core/models/user.model';
+import type { DashboardMetrics, PendingDocumentDetail } from '../../core/models/dashboard.model';
 
 /**
  * DashboardComponent displays pending mandatory reading documents for the
  * currently authenticated user based on their assigned processes.
+ * For Administrator users, it also displays high-level analytics: total
+ * reading acknowledgements, adherence rate, a doughnut chart of documents
+ * grouped by status, and a traceability table of pending reads.
  */
 @Component({
   selector: 'app-dashboard',
@@ -44,10 +54,11 @@ import type { User } from '../../core/models/user.model';
     TagModule,
     Tooltip,
     ToastModule,
+    ProgressBar,
     PdfViewerComponent,
   ],
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly authService = inject(AuthService);
   readonly documentService = inject(DocumentService);
   readonly dashboardService = inject(DashboardService);
@@ -66,8 +77,54 @@ export class DashboardComponent implements OnInit {
   /** Loading state indicator. */
   readonly isLoading = signal<boolean>(false);
 
+  /** Loading state for admin metrics. */
+  readonly isLoadingMetrics = signal<boolean>(false);
+
+  // Analytics State
+
+  /** Canvas reference for rendering the documents by status doughnut chart. */
+  @ViewChild('dashboardChart') chartRef?: ElementRef<HTMLCanvasElement>;
+
+  /** Native Chart.js instance. */
+  private chartInstance: Chart | null = null;
+
+  /** Total count of document reading acknowledgements across the system. */
+  totalAcknowledgements = 0;
+
+  /** Total completed reading acknowledgements count. */
+  totalCompleted = 0;
+
+  /** Total required reads that haven't been completed. */
+  totalPending = 0;
+
+  /** Adherence rate percentage (0-100). */
+  adherencePercentage = 0;
+
+  /** Document details with list of pending users. */
+  pendingDetails: PendingDocumentDetail[] = [];
+
+  /** Chart.js data configuration for the documents by status chart. */
+  chartData: any = null;
+
+  /** Chart.js display options for the documents by status chart. */
+  chartOptions: any = null;
+
   /** Promise tracking the pending documents load operation. */
   initPromise?: Promise<void>;
+
+  /**
+   * Indicates whether the currently authenticated user is an Administrator.
+   * Analytics and system-wide metrics are restricted strictly to Admins.
+   */
+  get isAdmin(): boolean {
+    const user = this.currentUser();
+    const role =
+      user?.roles?.name ??
+      (Array.isArray(user?.roles) ? (user.roles as any)[0]?.name : null) ??
+      (typeof this.authService.userRole === 'function' ? this.authService.userRole() : null);
+
+    return role?.toUpperCase() === 'ADMIN';
+  }
 
   // PDF viewer modal state
 
@@ -106,8 +163,19 @@ export class DashboardComponent implements OnInit {
     this.initPromise = this.loadPendingDocuments();
   }
 
+  ngAfterViewInit(): void {
+    if (this.chartData && this.chartRef?.nativeElement) {
+      this.initOrUpdateChart();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.destroyChart();
+  }
+
   /**
-   * Fetches the current user profile and pending reading documents.
+   * Fetches the current user profile, pending reading documents,
+   * and admin metrics (if the user is an Administrator).
    */
   async loadPendingDocuments(): Promise<void> {
     this.isLoading.set(true);
@@ -122,12 +190,186 @@ export class DashboardComponent implements OnInit {
       } else {
         this.pendingDocuments = [];
       }
+
+      if (this.isAdmin) {
+        await this.loadMetrics();
+      }
     } catch (error) {
       console.error('Error loading pending reading documents:', error);
       this.pendingDocuments = [];
     } finally {
       this.isLoading.set(false);
     }
+  }
+
+  /**
+   * Fetches aggregated metrics from DashboardService and maps them to Chart.js format.
+   * Only relevant for Administrator users.
+   */
+  async loadMetrics(): Promise<void> {
+    this.isLoadingMetrics.set(true);
+    try {
+      const metrics: DashboardMetrics = await this.dashboardService.getDashboardMetrics();
+      if (metrics) {
+        this.totalCompleted =
+          metrics.totalCompleted ?? metrics.total_completed ?? metrics.totalAcknowledgements ?? 0;
+        this.totalPending = metrics.totalPending ?? metrics.total_pending ?? 0;
+        this.adherencePercentage = metrics.adherencePercentage ?? metrics.adherence_percentage ?? 0;
+        this.pendingDetails = metrics.pendingDetails ?? metrics.pending_details ?? [];
+        this.totalAcknowledgements = this.totalCompleted;
+
+        const byStatus = metrics.documentsByStatus ?? metrics.documents_by_status ?? {};
+        this.setupChartData(byStatus);
+
+        this.cdr.detectChanges();
+        this.initOrUpdateChart();
+      }
+    } catch (error) {
+      console.error('Error loading dashboard metrics:', error);
+    } finally {
+      this.isLoadingMetrics.set(false);
+      this.cdr.markForCheck();
+      setTimeout(() => this.initOrUpdateChart(), 0);
+    }
+  }
+
+  /**
+   * Instantiates or re-renders the native Chart.js doughnut chart on the canvas element.
+   */
+  initOrUpdateChart(): void {
+    if (!this.chartRef?.nativeElement || !this.chartData) {
+      return;
+    }
+
+    this.destroyChart();
+
+    const canvas = this.chartRef.nativeElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+
+    this.chartInstance = new Chart(ctx, {
+      type: 'doughnut',
+      data: this.chartData,
+      options: this.chartOptions,
+    });
+  }
+
+  /**
+   * Destroys any existing Chart.js instance to prevent memory leaks and duplicate canvas contexts.
+   */
+  destroyChart(): void {
+    if (this.chartInstance) {
+      this.chartInstance.destroy();
+      this.chartInstance = null;
+    }
+  }
+
+  /**
+   * Formats a process area identifier into a readable Spanish label.
+   *
+   * @param area - Process area key.
+   * @returns Formatted label.
+   */
+  formatProcessArea(area: string | null | undefined): string {
+    if (!area) return 'General';
+    const areaLabels: Record<string, string> = {
+      calidad: 'Calidad',
+      direccion: 'Dirección',
+      quimica_clinica: 'Química Clínica',
+      hematologia: 'Hematología',
+      microbiologia: 'Microbiología',
+      inmunologia: 'Inmunología',
+      recursos_humanos: 'Recursos Humanos',
+      administracion: 'Administración',
+      mantenimiento: 'Mantenimiento',
+      compras: 'Compras',
+    };
+    return (
+      areaLabels[area.toLowerCase()] ||
+      area.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    );
+  }
+
+  /**
+   * Returns a PrimeNG tag severity corresponding to the process area.
+   *
+   * @param area - Process area key.
+   * @returns Tag severity type.
+   */
+  getProcessAreaSeverity(
+    area: string | null | undefined,
+  ): 'info' | 'success' | 'warn' | 'secondary' {
+    if (!area) return 'secondary';
+    const normalized = area.toLowerCase();
+    if (normalized.includes('calidad') || normalized.includes('direccion')) return 'success';
+    if (normalized.includes('quimica') || normalized.includes('hematologia')) return 'info';
+    return 'secondary';
+  }
+
+  /**
+   * Transforms the status count dictionary into Chart.js dataset structure
+   * enforcing the chronological document lifecycle order:
+   * Borrador (DRAFT) -> Revisado (REVIEWED) -> Aprobado (APPROVED) -> Obsoleto (OBSOLETE).
+   *
+   * @param documentsByStatus - Object with status keys and document count values.
+   */
+  setupChartData(documentsByStatus: Record<string, number>): void {
+    // Strict chronological document lifecycle order
+    const orderedStatuses = ['DRAFT', 'REVIEWED', 'APPROVED', 'OBSOLETE'] as const;
+
+    const statusLabels: Record<string, string> = {
+      DRAFT: 'Borrador',
+      REVIEWED: 'Revisado',
+      APPROVED: 'Aprobado',
+      OBSOLETE: 'Obsoleto',
+    };
+
+    const statusColors: Record<string, string> = {
+      DRAFT: '#f59e0b',
+      REVIEWED: '#3b82f6',
+      APPROVED: '#10b981',
+      OBSOLETE: '#64748b',
+    };
+
+    const labels = orderedStatuses.map((status) => statusLabels[status]);
+    const data = orderedStatuses.map((status) => documentsByStatus[status] ?? 0);
+    const backgroundColor = orderedStatuses.map((status) => statusColors[status]);
+
+    this.chartData = {
+      labels,
+      datasets: [
+        {
+          data,
+          backgroundColor,
+          hoverBackgroundColor: backgroundColor,
+        },
+      ],
+    };
+
+    this.chartOptions = {
+      plugins: {
+        legend: {
+          labels: {
+            usePointStyle: true,
+            color: '#475569',
+            font: {
+              family: 'Inter, system-ui, sans-serif',
+              size: 13,
+              weight: 500,
+            },
+          },
+          position: 'bottom',
+        },
+        tooltip: {
+          enabled: true,
+        },
+      },
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+    };
   }
 
   /**

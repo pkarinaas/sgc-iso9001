@@ -9,6 +9,150 @@
     </p>
   </header>
 
+  <!-- Section: Analytics & Metrics - Admin Only -->
+  @if (isAdmin) {
+    <section class="dashboard-analytics mb-6" id="dashboard-analytics-section">
+      <div class="analytics-header mb-4">
+        <h2 class="text-xl font-bold text-gray-800 m-0">Métricas del Sistema</h2>
+        <p class="text-sm text-gray-500 mt-1 m-0">
+          Estadísticas generales sobre el estado documental y lecturas obligatorias.
+        </p>
+      </div>
+
+      <div class="analytics-grid">
+        <!-- Card 1: Documents by Status Chart -->
+        <div class="dashboard-card chart-card" id="card-documents-chart">
+          <div class="mb-3">
+            <h3 class="text-base font-bold text-gray-800 m-0">Documentos por Estado</h3>
+            <p class="text-xs text-gray-500 m-0 mt-0.5">
+              Distribución del ciclo de vida documental
+            </p>
+          </div>
+          @if (isLoadingMetrics()) {
+            <div class="flex flex-col items-center justify-center p-8 text-gray-400">
+              <i class="pi pi-spin pi-spinner text-2xl mb-2 text-[#800020]"></i>
+              <p class="text-sm text-gray-500 m-0">Cargando métricas...</p>
+            </div>
+          } @else {
+            <div class="chart-wrapper">
+              <canvas #dashboardChart id="dashboard-chart-canvas"></canvas>
+            </div>
+          }
+        </div>
+
+        <!-- Card 2: Total Acknowledgements & Adherence Summary -->
+        <div class="dashboard-card summary-card" id="card-total-acknowledgements">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-3">
+              <div class="metric-icon-wrapper">
+                <i class="pi pi-check-circle text-2xl"></i>
+              </div>
+              <div>
+                <span class="summary-label">Confirmaciones de Lectura</span>
+                <h3 class="summary-value" id="total-ack-count">
+                  {{ totalCompleted }}
+                </h3>
+              </div>
+            </div>
+            <span class="adherence-badge" id="badge-adherence">
+              {{ adherencePercentage }}% de Adherencia
+            </span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="adherence-progress-wrapper my-3">
+            <p-progressbar [value]="adherencePercentage" [showValue]="false"></p-progressbar>
+          </div>
+
+          <!-- Text Breakdown -->
+          <div class="flex items-center justify-between text-xs text-gray-500 font-medium pt-1">
+            <span
+              class="flex items-center gap-1 text-emerald-700 font-semibold"
+              id="text-breakdown-completed"
+            >
+              <i class="pi pi-check text-xs"></i> {{ totalCompleted }} completada{{
+                totalCompleted === 1 ? '' : 's'
+              }}
+            </span>
+            <span
+              class="flex items-center gap-1 text-amber-700 font-semibold"
+              id="text-breakdown-pending"
+            >
+              <i class="pi pi-clock text-xs"></i> {{ totalPending }} pendiente{{
+                totalPending === 1 ? '' : 's'
+              }}
+            </span>
+            <span class="text-gray-600 font-semibold" id="text-breakdown-adherence">
+              {{ adherencePercentage }}% de Adherencia
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Control de Trazabilidad Table -->
+      <div class="dashboard-card mt-6" id="card-traceability-table">
+        <div class="mb-4">
+          <h3 class="text-base font-bold text-gray-800 m-0">Control de Trazabilidad</h3>
+          <p class="text-xs text-gray-500 m-0 mt-0.5">
+            Usuarios con lecturas pendientes agrupados por documento y área
+          </p>
+        </div>
+
+        @if (pendingDetails.length === 0) {
+          <div class="empty-state py-4" id="traceability-empty-state">
+            <i class="pi pi-check-circle text-2xl text-emerald-600 mb-1"></i>
+            <h4 class="text-sm font-semibold text-gray-800 m-0">¡Todo al día!</h4>
+            <p class="text-xs text-gray-500 m-0 mt-1">
+              No hay usuarios con lecturas pendientes en los documentos aprobados.
+            </p>
+          </div>
+        } @else {
+          <p-table [value]="pendingDetails" class="traceability-table" id="traceability-table">
+            <ng-template #header>
+              <tr>
+                <th style="width: 35%">Documento</th>
+                <th style="width: 20%">Área</th>
+                <th style="width: 30%">Usuarios Pendientes</th>
+                <th style="width: 15%" class="text-center">Estado</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-item>
+              <tr>
+                <td class="font-medium text-gray-900">
+                  @if (item.code) {
+                    <span class="doc-code mr-1.5">{{ item.code }}</span>
+                  }
+                  <span>{{ item.documentTitle || item.document_title }}</span>
+                </td>
+                <td>
+                  <p-tag
+                    [value]="formatProcessArea(item.processArea || item.process_area)"
+                    [severity]="getProcessAreaSeverity(item.processArea || item.process_area)"
+                  />
+                </td>
+                <td>
+                  <div class="flex flex-wrap gap-2 py-1">
+                    @for (
+                      userName of item.pendingUsers || item.pending_users || [];
+                      track userName
+                    ) {
+                      <span class="pending-user-chip">
+                        <i class="pi pi-user text-xs mr-1 text-gray-400"></i>{{ userName }}
+                      </span>
+                    }
+                  </div>
+                </td>
+                <td class="text-center">
+                  <p-tag value="Pendiente de Lectura" severity="warn" />
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        }
+      </div>
+    </section>
+  }
+
   <!-- Section: Documentos Pendientes de Lectura -->
   <div class="dashboard-card">
     <div class="flex items-center justify-between mb-4">

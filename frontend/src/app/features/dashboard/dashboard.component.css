@@ -4,6 +4,119 @@
   margin: 0 auto;
 }
 
+/* Analytics & Metrics Grid */
+.dashboard-analytics {
+  margin-bottom: 2rem;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 992px) {
+  .analytics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 220px;
+}
+
+.metric-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.75rem;
+  background-color: #fff1f2;
+  color: #881337;
+  flex-shrink: 0;
+}
+
+.summary-label {
+  display: block;
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.summary-value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0.25rem 0 0 0;
+  line-height: 1;
+}
+
+.adherence-badge {
+  display: inline-flex;
+  align-items: center;
+  background-color: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.adherence-progress-wrapper {
+  margin: 1.25rem 0;
+}
+
+/* Custom styling for PrimeNG ProgressBar to match brand color */
+:host ::ng-deep .p-progressbar {
+  height: 0.65rem;
+  background-color: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+  border: none;
+}
+
+:host ::ng-deep .p-progressbar .p-progressbar-value {
+  background-color: #881337;
+  border-radius: 9999px;
+  transition: width 0.4s ease-in-out;
+}
+
+.pending-user-chip {
+  display: inline-flex;
+  align-items: center;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+#card-traceability-table {
+  margin-top: 2rem;
+}
+
+.chart-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-wrapper {
+  position: relative;
+  height: 280px;
+  width: 100%;
+}
+
 .dashboard-card {
   background: #ffffff;
   border-radius: 0.75rem;

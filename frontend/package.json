@@ -21,6 +21,7 @@
     "@angular/service-worker": "^22.2.0",
     "@primeng/themes": "^21.0.4",
     "@supabase/supabase-js": "^2.117.3",
+    "chart.js": "^4.6.1",
     "ngx-extended-pdf-viewer": "^31.0.1",
     "pdf-lib": "^1.17.1",
     "primeicons": "^8.0.2",

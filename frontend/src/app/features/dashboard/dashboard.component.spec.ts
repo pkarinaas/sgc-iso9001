@@ -1,16 +1,47 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { DashboardComponent } from './dashboard.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DocumentService } from '../../core/services/document.service';
 import { DashboardService } from '../../core/services/dashboard.service';
 import type { Document } from '../../core/models/document.model';
 import type { User } from '../../core/models/user.model';
+import type { DashboardMetrics } from '../../core/models/dashboard.model';
 
 describe('DashboardComponent', () => {
   let component: DashboardComponent;
   let fixture: ComponentFixture<DashboardComponent>;
+
+  beforeAll(() => {
+    // Mock HTMLCanvasElement.getContext for Chart.js rendering in JSDOM
+    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
+      fillRect: vi.fn(),
+      clearRect: vi.fn(),
+      getImageData: vi.fn(() => ({ data: new Array(4) })),
+      putImageData: vi.fn(),
+      createImageData: vi.fn(() => []),
+      setTransform: vi.fn(),
+      drawImage: vi.fn(),
+      save: vi.fn(),
+      fillText: vi.fn(),
+      restore: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      closePath: vi.fn(),
+      stroke: vi.fn(),
+      translate: vi.fn(),
+      scale: vi.fn(),
+      rotate: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn(),
+      measureText: vi.fn(() => ({ width: 0 })),
+      transform: vi.fn(),
+      rect: vi.fn(),
+      clip: vi.fn(),
+    });
+  });
 
   const mockUser: User = {
     id: 'usr-123',
@@ -20,6 +51,36 @@ describe('DashboardComponent', () => {
     is_active: true,
     created_at: new Date().toISOString(),
     assigned_processes: ['quimica_clinica', 'hematologia'],
+  };
+
+  const mockAdminUser: User = {
+    id: 'usr-admin',
+    email: 'admin@empresa.com',
+    full_name: 'Admin User',
+    role_id: 1,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    assigned_processes: ['quimica_clinica'],
+    roles: { id: 1, name: 'ADMIN', description: 'Administrador', created_at: '' },
+  };
+
+  const mockMetrics: DashboardMetrics = {
+    documentsByStatus: {
+      DRAFT: 2,
+      APPROVED: 5,
+    },
+    totalCompleted: 14,
+    totalPending: 3,
+    adherencePercentage: 82.35,
+    pendingDetails: [
+      {
+        documentTitle: 'Procedimiento de Toma de Muestra',
+        processArea: 'quimica_clinica',
+        pendingUsers: ['Carlos Gómez', 'María López'],
+        code: 'SGC-PR-001',
+      },
+    ],
+    totalAcknowledgements: 14,
   };
 
   const mockPendingDocs: Document[] = [
@@ -61,6 +122,7 @@ describe('DashboardComponent', () => {
 
   let mockDashboardService: {
     getPendingDocuments: ReturnType<typeof vi.fn>;
+    getDashboardMetrics: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -70,12 +132,15 @@ describe('DashboardComponent', () => {
 
     mockDocumentService = {
       getPendingDocuments: vi.fn().mockResolvedValue([...mockPendingDocs]),
-      getSignedDocumentUrl: vi.fn().mockResolvedValue('https://storage.supabase.com/signed/test.pdf'),
+      getSignedDocumentUrl: vi
+        .fn()
+        .mockResolvedValue('https://storage.supabase.com/signed/test.pdf'),
       acknowledgeDocument: vi.fn().mockResolvedValue({ id: 1 }),
     };
 
     mockDashboardService = {
       getPendingDocuments: vi.fn().mockResolvedValue([...mockPendingDocs]),
+      getDashboardMetrics: vi.fn().mockResolvedValue({ ...mockMetrics }),
     };
 
     await TestBed.configureTestingModule({
@@ -178,7 +243,11 @@ describe('DashboardComponent', () => {
 
     it('should block Ctrl+P and Ctrl+S print/save shortcuts when PDF viewer is open', () => {
       component.isPdfViewerVisible = true;
-      const printEvent = new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, cancelable: true });
+      const printEvent = new KeyboardEvent('keydown', {
+        key: 'p',
+        ctrlKey: true,
+        cancelable: true,
+      });
       const preventPrintSpy = vi.spyOn(printEvent, 'preventDefault');
 
       component.onWindowKeyDown(printEvent);
@@ -197,9 +266,7 @@ describe('DashboardComponent', () => {
 
       await component.openReader(docWithoutFile);
       expect(component.isPdfViewerVisible).toBe(false);
-      expect(toastSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ severity: 'warn' }),
-      );
+      expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warn' }));
     });
 
     it('should show error toast if signed url generation returns null', async () => {
@@ -208,9 +275,7 @@ describe('DashboardComponent', () => {
 
       await component.openReader(mockPendingDocs[0]);
       expect(component.isPdfViewerVisible).toBe(false);
-      expect(toastSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ severity: 'error' }),
-      );
+      expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }));
     });
   });
 
@@ -358,5 +423,122 @@ describe('DashboardComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('¡Al día! No tienes documentos pendientes de lectura.');
+  });
+
+  describe('Dashboard Analytics & Charts', () => {
+    it('should hide analytics section when user is not an Admin', () => {
+      expect(component.isAdmin).toBe(false);
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const analyticsSection = compiled.querySelector('#dashboard-analytics-section');
+      expect(analyticsSection).toBeNull();
+    });
+
+    it('should display analytics section with redesigned cards and traceability table when user is an Admin', async () => {
+      mockAuthService.getCurrentUserProfile.mockResolvedValueOnce({ ...mockAdminUser });
+
+      await component.loadPendingDocuments();
+      fixture.detectChanges();
+
+      expect(component.isAdmin).toBe(true);
+      expect(mockDashboardService.getDashboardMetrics).toHaveBeenCalled();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const analyticsSection = compiled.querySelector('#dashboard-analytics-section');
+      expect(analyticsSection).not.toBeNull();
+
+      // Verify card ordering: Documents by Status (Chart) first, Adherence second
+      const analyticsGrid = compiled.querySelector('.analytics-grid');
+      expect(analyticsGrid).not.toBeNull();
+      const firstCard = analyticsGrid?.children[0];
+      const secondCard = analyticsGrid?.children[1];
+      expect(firstCard?.id).toBe('card-documents-chart');
+      expect(secondCard?.id).toBe('card-total-acknowledgements');
+
+      // Card 1: Documents chart card with native canvas
+      const chartCard = compiled.querySelector('#card-documents-chart');
+      expect(chartCard).not.toBeNull();
+      expect(chartCard?.textContent).toContain('Documentos por Estado');
+      const pChartEl = chartCard?.querySelector('p-chart');
+      expect(pChartEl).toBeNull();
+      const canvasEl = chartCard?.querySelector('canvas#dashboard-chart-canvas');
+      expect(canvasEl).not.toBeNull();
+
+      // Card 2: Confirmaciones de lectura & Adherencia
+      const summaryCard = compiled.querySelector('#card-total-acknowledgements');
+      expect(summaryCard).not.toBeNull();
+      expect(summaryCard?.textContent).toContain('Confirmaciones de Lectura');
+      expect(summaryCard?.textContent).toContain('14');
+      expect(summaryCard?.textContent).toContain('82.35% de Adherencia');
+      expect(summaryCard?.textContent).toContain('14 completadas');
+      expect(summaryCard?.textContent).toContain('3 pendientes');
+
+      const progressBar = summaryCard?.querySelector('p-progressbar');
+      expect(progressBar).not.toBeNull();
+
+      // Card 3: Control de Trazabilidad table
+      const traceabilityCard = compiled.querySelector('#card-traceability-table');
+      expect(traceabilityCard).not.toBeNull();
+      expect(traceabilityCard?.textContent).toContain('Control de Trazabilidad');
+      expect(traceabilityCard?.textContent).toContain('SGC-PR-001');
+      expect(traceabilityCard?.textContent).toContain('Procedimiento de Toma de Muestra');
+      expect(traceabilityCard?.textContent).toContain('Química Clínica');
+      expect(traceabilityCard?.textContent).toContain('Carlos Gómez');
+      expect(traceabilityCard?.textContent).toContain('María López');
+      expect(traceabilityCard?.textContent).toContain('Pendiente de Lectura');
+    });
+
+    it('should map documentsByStatus to Chart.js data format in strict chronological lifecycle order with fallback to 0', () => {
+      // Input in arbitrary order with missing statuses (DRAFT and REVIEWED absent)
+      component.setupChartData({
+        OBSOLETE: 4,
+        APPROVED: 9,
+      });
+
+      expect(component.chartData).toBeTruthy();
+      expect(component.chartData.labels).toEqual(['Borrador', 'Revisado', 'Aprobado', 'Obsoleto']);
+      expect(component.chartData.datasets[0].data).toEqual([0, 0, 9, 4]);
+      expect(component.chartData.datasets[0].backgroundColor).toEqual([
+        '#f59e0b',
+        '#3b82f6',
+        '#10b981',
+        '#64748b',
+      ]);
+      expect(component.chartOptions.cutout).toBe('60%');
+      expect(component.chartOptions.responsive).toBe(true);
+      expect(component.chartOptions.maintainAspectRatio).toBe(false);
+    });
+
+    it('should destroy previous chart instance before re-creating or on ngOnDestroy', () => {
+      const mockDestroy = vi.fn();
+      (component as any).chartInstance = { destroy: mockDestroy };
+
+      component.destroyChart();
+
+      expect(mockDestroy).toHaveBeenCalled();
+      expect((component as any).chartInstance).toBeNull();
+    });
+
+    it('should correctly format process area labels and severities', () => {
+      expect(component.formatProcessArea('quimica_clinica')).toBe('Química Clínica');
+      expect(component.formatProcessArea('calidad')).toBe('Calidad');
+      expect(component.formatProcessArea(null)).toBe('General');
+      expect(component.getProcessAreaSeverity('calidad')).toBe('success');
+      expect(component.getProcessAreaSeverity('quimica_clinica')).toBe('info');
+      expect(component.getProcessAreaSeverity(null)).toBe('secondary');
+    });
+
+    it('should handle empty metrics response gracefully', async () => {
+      mockDashboardService.getDashboardMetrics.mockResolvedValueOnce(null);
+
+      await component.loadMetrics();
+      fixture.detectChanges();
+
+      expect(component.totalAcknowledgements).toBe(0);
+      expect(component.totalCompleted).toBe(0);
+      expect(component.totalPending).toBe(0);
+      expect(component.adherencePercentage).toBe(0);
+      expect(component.pendingDetails).toEqual([]);
+    });
   });
 });
