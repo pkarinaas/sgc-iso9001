@@ -22,17 +22,22 @@
     "@primeng/themes": "^21.0.4",
     "@supabase/supabase-js": "^2.117.3",
     "chart.js": "^4.6.1",
+    "file-saver": "^2.0.5",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9",
     "ngx-extended-pdf-viewer": "^31.0.1",
     "pdf-lib": "^1.17.1",
     "primeicons": "^8.0.2",
     "primeng": "^22.1.2",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@angular/build": "^22.2.1",
     "@angular/cli": "^22.2.1",
     "@angular/compiler-cli": "^22.2.0",
+    "@types/file-saver": "^2.0.7",
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",

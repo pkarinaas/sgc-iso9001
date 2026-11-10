@@ -8,7 +8,6 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import {
   FormsModule,
   ReactiveFormsModule,
@@ -17,10 +16,18 @@ import {
   AbstractControl,
   ValidationErrors,
 } from '@angular/forms';
-import { MessageService, FilterService, ConfirmationService, SharedModule } from 'primeng/api';
+import {
+  MessageService,
+  FilterService,
+  ConfirmationService,
+  SharedModule,
+  MenuItem,
+} from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonDirective } from 'primeng/button';
+import { Ripple } from 'primeng/ripple';
+import { MenuModule } from 'primeng/menu';
 import { InputTextModule } from 'primeng/inputtext';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
@@ -33,6 +40,10 @@ import { ToastModule } from 'primeng/toast';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { Tooltip } from 'primeng/tooltip';
 import { NgxExtendedPdfViewerModule } from 'ngx-extended-pdf-viewer';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document, DocumentStatus } from '../../../core/models/document.model';
@@ -57,12 +68,13 @@ interface DateRangeFilter {
   templateUrl: './document-list.html',
   styleUrl: './document-list.css',
   imports: [
-    DatePipe,
     FormsModule,
     ReactiveFormsModule,
     TableModule,
     TagModule,
     ButtonDirective,
+    Ripple,
+    MenuModule,
     InputTextModule,
     IconFieldModule,
     InputIconModule,
@@ -268,9 +280,16 @@ export class DocumentListComponent implements OnInit {
   endDate: Date | null = null;
   readonly datePickerInputStyle = { height: '42px' };
 
+  /** Menu items for the export dropdown popup menu. */
+  exportMenuItems: MenuItem[] = [];
+
   // Lifecycle
 
   async ngOnInit(): Promise<void> {
+    this.exportMenuItems = [
+      { label: 'Exportar a PDF', icon: 'pi pi-file-pdf', command: () => this.exportPdf() },
+      { label: 'Exportar a Excel', icon: 'pi pi-file-excel', command: () => this.exportExcel() },
+    ];
     this.filterService.register(
       'dateRangeCustom',
       (value: string | Date | null | undefined, filter: DateRangeFilter | null): boolean => {
@@ -358,6 +377,126 @@ export class DocumentListComponent implements OnInit {
     return typeof version === 'number' && !Number.isInteger(version)
       ? `v${version.toFixed(1)}`
       : `v${String(version).padStart(2, '0')}`;
+  }
+
+  /**
+   * Formats a process area identifier into its human-readable label.
+   *
+   * @param area - Key or name of the process area.
+   * @returns Formatted label.
+   */
+  getProcessAreaLabel(area: string | null | undefined): string {
+    if (!area) return 'N/A';
+    const found = this.processAreaOptions.find((p) => p.value === area);
+    return found ? found.label : area;
+  }
+
+  /**
+   * Formats the relevant document date according to ISO 9001 requirements.
+   * - If status is 'APPROVED', returns the Approval Date (e.g. approved_at / approvedAt or fallback).
+   * - Otherwise, returns the Last Modification Date (updated_at / updatedAt).
+   * Format: MM/YYYY (e.g. '11/2026').
+   *
+   * @param doc - The document object.
+   * @returns Formatted date string in 'MM/YYYY' format or '-' if date is unavailable.
+   */
+  getFormattedDocumentDate(doc: any): string {
+    if (!doc) return '-';
+    const rawDate =
+      doc.status === 'APPROVED'
+        ? (doc.approved_at ?? doc.approvedAt ?? doc.updated_at ?? doc.updatedAt)
+        : (doc.updated_at ?? doc.updatedAt);
+
+    if (!rawDate) return '-';
+    const date = new Date(rawDate);
+    if (Number.isNaN(date.getTime())) return '-';
+
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${month}/${year}`;
+  }
+
+  /**
+   * Retrieves the current document set displayed in the table (filtered or full list).
+   *
+   * @returns Array of documents to export.
+   */
+  getDocumentsToExport(): Document[] {
+    return this.documentsTable?.filteredValue ?? this.displayedDocuments;
+  }
+
+  /**
+   * Exports the currently displayed document list into a PDF document using jsPDF and jspdf-autotable.
+   */
+  exportPdf(): void {
+    const docs = this.getDocumentsToExport();
+    const doc = new jsPDF();
+
+    // Header title and metadata
+    doc.setFontSize(16);
+    doc.setTextColor(136, 19, 55); // #881337
+    doc.text('Listado Maestro de Documentos - SGC', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Fecha de exportación: ${new Date().toLocaleDateString('es-ES')}`, 14, 25);
+    doc.text(`Total de documentos: ${docs.length}`, 14, 30);
+
+    const head = [['Código', 'Título', 'Área / Proceso', 'Versión', 'Estado', 'Fecha']];
+    const body = docs.map((d) => [
+      d.code || 'S/C',
+      d.title || '',
+      this.getProcessAreaLabel(d.process_area),
+      this.formatVersion(d.version),
+      this.getStatusLabel(d.status),
+      this.getFormattedDocumentDate(d),
+    ]);
+
+    autoTable(doc, {
+      head,
+      body,
+      startY: 35,
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        overflow: 'linebreak',
+      },
+      headStyles: {
+        fillColor: [136, 19, 55],
+        textColor: 255,
+        fontStyle: 'bold',
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+    });
+
+    doc.save('listado_maestro_sgc.pdf');
+  }
+
+  /**
+   * Exports the currently displayed document list into an Excel workbook (.xlsx) using xlsx and file-saver.
+   */
+  exportExcel(): void {
+    const docs = this.getDocumentsToExport();
+    const data = docs.map((d) => ({
+      'Código': d.code || 'S/C',
+      'Título': d.title || '',
+      'Área / Proceso': this.getProcessAreaLabel(d.process_area),
+      'Versión': this.formatVersion(d.version),
+      'Estado': this.getStatusLabel(d.status),
+      'Fecha': this.getFormattedDocumentDate(d),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Listado Maestro');
+
+    const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
+    });
+    saveAs(blob, 'listado_maestro_sgc.xlsx');
   }
 
   // PDF viewer modal methods
