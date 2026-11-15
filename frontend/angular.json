@@ -34,7 +34,15 @@
               "src/styles.css"
             ],
             "allowedCommonJsDependencies": [
-              "pako"
+              "pako",
+              "file-saver",
+              "xlsx",
+              "jspdf",
+              "html2canvas",
+              "canvg",
+              "raf",
+              "rgbcolor",
+              "core-js"
             ]
           },
           "configurations": {
@@ -42,8 +50,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "3.5MB",
-                  "maximumError": "4.5MB"
+                  "maximumWarning": "4.5MB",
+                  "maximumError": "5.5MB"
                 },
                 {
                   "type": "anyComponentStyle",

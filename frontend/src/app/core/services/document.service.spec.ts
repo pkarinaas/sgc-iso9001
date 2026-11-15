@@ -464,4 +464,33 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       );
     });
   });
+
+  describe('getDashboardMetrics', () => {
+    it('should call supabase.rpc with get_dashboard_metrics and return data', async () => {
+      const mockMetrics = {
+        documentsByStatus: { APPROVED: 5 },
+        totalAcknowledgements: 12,
+      };
+      const rpcSpy = vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
+        data: mockMetrics,
+        error: null,
+      } as any);
+
+      const result = await service.getDashboardMetrics();
+
+      expect(rpcSpy).toHaveBeenCalledWith('get_dashboard_metrics');
+      expect(result).toEqual(mockMetrics);
+    });
+
+    it('should throw translated error when RPC fails', async () => {
+      vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
+        data: null,
+        error: { message: 'permission denied for function get_dashboard_metrics' },
+      } as any);
+
+      await expect(service.getDashboardMetrics()).rejects.toThrow(
+        'Error al obtener métricas del dashboard',
+      );
+    });
+  });
 });

@@ -3,6 +3,30 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { FilterService, MessageService, ConfirmationService } from 'primeng/api';
+
+const mockSavePdf = vi.fn();
+vi.mock('jspdf', () => {
+  return {
+    default: class MockJsPDF {
+      setFontSize = vi.fn();
+      setTextColor = vi.fn();
+      text = vi.fn();
+      save = mockSavePdf;
+    },
+  };
+});
+
+const mockAutoTable = vi.fn();
+vi.mock('jspdf-autotable', () => ({
+  default: (...args: any[]) => mockAutoTable(...args),
+}));
+
+const mockSaveAs = vi.fn();
+vi.mock('file-saver', () => ({
+  saveAs: (...args: any[]) => mockSaveAs(...args),
+}));
+
+import * as XLSX from 'xlsx';
 import { DocumentListComponent } from './document-list';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
@@ -948,6 +972,170 @@ describe('DocumentListComponent', () => {
           }),
         );
         expect(mockDocumentService.loadDocuments).toHaveBeenCalled();
+      });
+    });
+
+    describe('Master Document List Export', () => {
+      it('should display subtitle inside table card and remove it from page header', () => {
+        const cardTitle = fixture.nativeElement.querySelector('.doc-list-table-card h2');
+        const headerSubtitle = fixture.nativeElement.querySelector('.doc-list-header__subtitle');
+
+        expect(cardTitle).not.toBeNull();
+        expect(cardTitle.textContent).toContain(
+          'Listado Maestro de Documentos del Sistema de Gestión de Calidad',
+        );
+        expect(headerSubtitle).toBeNull();
+      });
+
+      it('should render the download icon button and initialize popup menu items', () => {
+        const btnExportMenu = fixture.nativeElement.querySelector(
+          '#btn-export-menu',
+        ) as HTMLButtonElement;
+
+        expect(btnExportMenu).not.toBeNull();
+        expect(btnExportMenu.getAttribute('aria-label')).toBe('Opciones de exportación');
+        expect(btnExportMenu.querySelector('.pi-download')).not.toBeNull();
+
+        expect(component.exportMenuItems.length).toBe(2);
+        expect(component.exportMenuItems[0].label).toBe('Exportar a PDF');
+        expect(component.exportMenuItems[0].icon).toBe('pi pi-file-pdf');
+        expect(component.exportMenuItems[1].label).toBe('Exportar a Excel');
+        expect(component.exportMenuItems[1].icon).toBe('pi pi-file-excel');
+      });
+
+      it('should call exportPdf when PDF menu item command is triggered', () => {
+        const exportPdfSpy = vi.spyOn(component, 'exportPdf').mockImplementation(() => {});
+
+        component.exportMenuItems[0].command?.({
+          originalEvent: new Event('click'),
+          item: component.exportMenuItems[0],
+        });
+
+        expect(exportPdfSpy).toHaveBeenCalled();
+      });
+
+      it('should call exportExcel when Excel menu item command is triggered', () => {
+        const exportExcelSpy = vi.spyOn(component, 'exportExcel').mockImplementation(() => {});
+
+        component.exportMenuItems[1].command?.({
+          originalEvent: new Event('click'),
+          item: component.exportMenuItems[1],
+        });
+
+        expect(exportExcelSpy).toHaveBeenCalled();
+      });
+
+      describe('Conditional Date Formatting (getFormattedDocumentDate)', () => {
+        it('should return "-" when document or date is undefined/invalid', () => {
+          expect(component.getFormattedDocumentDate(null)).toBe('-');
+          expect(component.getFormattedDocumentDate({ status: 'DRAFT' })).toBe('-');
+          expect(
+            component.getFormattedDocumentDate({ status: 'DRAFT', updated_at: 'invalid-date' }),
+          ).toBe('-');
+        });
+
+        it('should format approved_at as MM/YYYY when status is APPROVED', () => {
+          const doc = {
+            status: 'APPROVED',
+            approved_at: '2026-11-20T10:00:00Z',
+            updated_at: '2026-05-10T10:00:00Z',
+          };
+          expect(component.getFormattedDocumentDate(doc)).toBe('11/2026');
+        });
+
+        it('should support approvedAt (camelCase) when status is APPROVED', () => {
+          const doc = {
+            status: 'APPROVED',
+            approvedAt: '2026-08-15T10:00:00Z',
+          };
+          expect(component.getFormattedDocumentDate(doc)).toBe('08/2026');
+        });
+
+        it('should fallback to updated_at / updatedAt when status is APPROVED but no approval date exists', () => {
+          const docSnake = {
+            status: 'APPROVED',
+            updated_at: '2026-03-12T10:00:00Z',
+          };
+          expect(component.getFormattedDocumentDate(docSnake)).toBe('03/2026');
+
+          const docCamel = {
+            status: 'APPROVED',
+            updatedAt: '2026-04-12T10:00:00Z',
+          };
+          expect(component.getFormattedDocumentDate(docCamel)).toBe('04/2026');
+        });
+
+        it('should use updated_at / updatedAt when status is not APPROVED', () => {
+          const docDraft = {
+            status: 'DRAFT',
+            updated_at: '2026-02-14T10:00:00Z',
+            approved_at: '2026-12-01T10:00:00Z',
+          };
+          expect(component.getFormattedDocumentDate(docDraft)).toBe('02/2026');
+
+          const docReviewed = {
+            status: 'REVIEWED',
+            updatedAt: '2026-07-25T10:00:00Z',
+          };
+          expect(component.getFormattedDocumentDate(docReviewed)).toBe('07/2026');
+        });
+      });
+
+      it('should include "Fecha" column in table header and display formatted date in table body', () => {
+        fixture.detectChanges();
+        const thElements = Array.from(
+          fixture.nativeElement.querySelectorAll('th'),
+        ) as HTMLElement[];
+        const dateHeader = thElements.find((th) => th.textContent?.includes('Fecha'));
+        expect(dateHeader).not.toBeUndefined();
+        expect(dateHeader?.textContent).not.toContain('Fecha de Modificación');
+
+        const firstDoc = mockDocuments[0];
+        const expectedDate = component.getFormattedDocumentDate(firstDoc);
+        const tdCells = Array.from(
+          fixture.nativeElement.querySelectorAll('tbody tr:first-child td'),
+        ) as HTMLElement[];
+        const matchingCell = tdCells.find((td) => td.textContent?.trim() === expectedDate);
+        expect(matchingCell).not.toBeUndefined();
+      });
+
+      it('should execute exportPdf including "Fecha" in table header and body', () => {
+        mockSavePdf.mockClear();
+        mockAutoTable.mockClear();
+
+        component.exportPdf();
+
+        expect(mockAutoTable).toHaveBeenCalled();
+        const callArgs = mockAutoTable.mock.calls[0][1];
+        expect(callArgs.head[0]).toEqual([
+          'Código',
+          'Título',
+          'Área / Proceso',
+          'Versión',
+          'Estado',
+          'Fecha',
+        ]);
+        expect(callArgs.body[0]).toHaveLength(6);
+        expect(callArgs.body[0][5]).toBe(component.getFormattedDocumentDate(mockDocuments[0]));
+        expect(mockSavePdf).toHaveBeenCalledWith('listado_maestro_sgc.pdf');
+      });
+
+      it('should execute exportExcel including "Fecha" property in exported data', () => {
+        mockSaveAs.mockClear();
+        const jsonToSheetSpy = vi.spyOn(XLSX.utils, 'json_to_sheet');
+
+        component.exportExcel();
+
+        expect(jsonToSheetSpy).toHaveBeenCalled();
+        const exportedRows = jsonToSheetSpy.mock.calls[0][0] as any[];
+        expect(exportedRows[0]).toHaveProperty('Fecha');
+        expect(exportedRows[0]['Fecha']).toBe(
+          component.getFormattedDocumentDate(mockDocuments[0]),
+        );
+        expect(mockSaveAs).toHaveBeenCalledWith(
+          expect.any(Blob),
+          'listado_maestro_sgc.xlsx',
+        );
       });
     });
   });

@@ -5,9 +5,6 @@
   <header class="doc-list-header">
     <div class="doc-list-header__titles">
       <h1 class="doc-list-header__title">Repositorio Documental</h1>
-      <p class="doc-list-header__subtitle">
-        Listado Maestro de Documentos del Sistema de Gestión de Calidad
-      </p>
     </div>
 
     @if (canViewActions()) {
@@ -34,6 +31,25 @@
 
   <!-- Data table -->
   <div class="doc-list-table-card">
+    <div class="flex justify-content-between align-items-center mb-4">
+      <h2 class="text-xl font-semibold m-0">Listado Maestro de Documentos del Sistema de Gestión de Calidad</h2>
+      <div>
+        <p-menu #exportMenu [popup]="true" [model]="exportMenuItems"></p-menu>
+        <button
+          id="btn-export-menu"
+          type="button"
+          pButton
+          pRipple
+          icon="pi pi-download"
+          class="p-button-rounded p-button-text p-button-secondary"
+          (click)="exportMenu.toggle($event)"
+          aria-label="Opciones de exportación"
+        >
+          <i class="pi pi-download" pButtonIcon></i>
+        </button>
+      </div>
+    </div>
+
     <p-table
       #dt
       [value]="displayedDocuments"
@@ -119,7 +135,7 @@
           <th pSortableColumn="version">Versión <p-sort-icon field="version" /></th>
           <th>Estado</th>
           <th pSortableColumn="updated_at">
-            Fecha de Modificación <p-sort-icon field="updated_at" />
+            Fecha <p-sort-icon field="updated_at" />
           </th>
           <th class="col-actions">Acciones</th>
         </tr>
@@ -149,8 +165,8 @@
             </span>
           </td>
 
-          <!-- Updated at -->
-          <td>{{ doc.updated_at | date: 'dd/MM/yyyy' }}</td>
+          <!-- Date -->
+          <td>{{ getFormattedDocumentDate(doc) }}</td>
 
           <!-- Action buttons -->
           <td class="col-actions">
