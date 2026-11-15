@@ -56,7 +56,8 @@ body {
   display: flex;
 }
 
-.flex-col {
+.flex-col,
+.flex-column {
   flex-direction: column;
 }
 
@@ -75,6 +76,11 @@ body {
 .items-center,
 .align-items-center {
   align-items: center;
+}
+
+.items-end,
+.align-items-end {
+  align-items: flex-end;
 }
 
 .justify-between,
@@ -205,6 +211,10 @@ body {
   margin-left: auto;
 }
 
+.gap-1 {
+  gap: 0.25rem;
+}
+
 .gap-2 {
   gap: 0.5rem;
 }
@@ -215,6 +225,16 @@ body {
 
 .gap-4 {
   gap: 1rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 
 .rounded-lg {

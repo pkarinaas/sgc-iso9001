@@ -133,10 +133,10 @@ describe('AppLayoutComponent', () => {
     expect(component.isWarningVisible()).toBe(true);
   });
 
-  it('should render navigation links for dashboard, users and documents', () => {
+  it('should render navigation links for dashboard, users, documents and reports', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const links = compiled.querySelectorAll('aside nav a');
-    expect(links.length).toBe(3);
+    expect(links.length).toBe(4);
 
     const dashboardLink = Array.from(links).find(
       (link) => link.getAttribute('routerLink') === '/dashboard',
@@ -144,6 +144,9 @@ describe('AppLayoutComponent', () => {
     const userLink = Array.from(links).find((link) => link.getAttribute('routerLink') === '/users');
     const docLink = Array.from(links).find(
       (link) => link.getAttribute('routerLink') === '/documents',
+    );
+    const reportsLink = Array.from(links).find(
+      (link) => link.getAttribute('routerLink') === '/reportes',
     );
 
     expect(dashboardLink).toBeTruthy();
@@ -157,6 +160,10 @@ describe('AppLayoutComponent', () => {
     expect(docLink).toBeTruthy();
     expect(docLink?.textContent).toContain('Repositorio');
     expect(docLink?.querySelector('.pi.pi-folder')).toBeTruthy();
+
+    expect(reportsLink).toBeTruthy();
+    expect(reportsLink?.textContent).toContain('Reportes');
+    expect(reportsLink?.querySelector('.pi.pi-file-check')).toBeTruthy();
   });
 
   it('should call authService.signOut() and stop monitoring when clicking logout button', async () => {
@@ -234,9 +241,10 @@ describe('AppLayoutComponent', () => {
       expect(userLink).toBeNull();
 
       const links = compiled.querySelectorAll('aside nav a');
-      expect(links.length).toBe(2);
+      expect(links.length).toBe(3);
       expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/dashboard')).toBe(true);
       expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/documents')).toBe(true);
+      expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/reportes')).toBe(true);
     });
   });
 });
