@@ -1,6 +1,24 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+
+const mockChartToggleDataVisibility = vi.fn();
+const mockChartUpdate = vi.fn();
+const mockChartDestroy = vi.fn();
+
+vi.mock('chart.js/auto', () => {
+  return {
+    Chart: vi.fn().mockImplementation(function (this: any, ctx: any, config: any) {
+      this.ctx = ctx;
+      this.config = config;
+      this.toggleDataVisibility = mockChartToggleDataVisibility;
+      this.update = mockChartUpdate;
+      this.destroy = mockChartDestroy;
+      return this;
+    }),
+  };
+});
+
 import { DashboardComponent } from './dashboard.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DocumentService } from '../../core/services/document.service';
@@ -446,6 +464,7 @@ describe('DashboardComponent', () => {
       const compiled = fixture.nativeElement as HTMLElement;
       const analyticsSection = compiled.querySelector('#dashboard-analytics-section');
       expect(analyticsSection).not.toBeNull();
+      expect(compiled.textContent).not.toContain('Métricas del Sistema');
 
       // Verify card ordering: Documents by Status (Chart) first, Adherence second
       const analyticsGrid = compiled.querySelector('.analytics-grid');
@@ -517,6 +536,24 @@ describe('DashboardComponent', () => {
 
       expect(mockDestroy).toHaveBeenCalled();
       expect((component as any).chartInstance).toBeNull();
+    });
+
+    it('should hide the "Obsoleto" slice by default (index 3) when chart initializes', () => {
+      mockChartToggleDataVisibility.mockClear();
+      mockChartUpdate.mockClear();
+
+      component.chartData = {
+        labels: ['Borrador', 'Revisado', 'Aprobado', 'Obsoleto'],
+        datasets: [{ data: [0, 0, 9, 4] }],
+      };
+
+      const canvas = document.createElement('canvas');
+      component.chartRef = { nativeElement: canvas };
+
+      component.initOrUpdateChart();
+
+      expect(mockChartToggleDataVisibility).toHaveBeenCalledWith(3);
+      expect(mockChartUpdate).toHaveBeenCalled();
     });
 
     it('should correctly format process area labels and severities', () => {

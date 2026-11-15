@@ -12,14 +12,7 @@
   <!-- Section: Analytics & Metrics - Admin Only -->
   @if (isAdmin) {
     <section class="dashboard-analytics mb-6" id="dashboard-analytics-section">
-      <div class="analytics-header mb-4">
-        <h2 class="text-xl font-bold text-gray-800 m-0">Métricas del Sistema</h2>
-        <p class="text-sm text-gray-500 mt-1 m-0">
-          Estadísticas generales sobre el estado documental y lecturas obligatorias.
-        </p>
-      </div>
-
-      <div class="analytics-grid">
+      <div class="analytics-grid mt-5" style="margin-top: 2rem">
         <!-- Card 1: Documents by Status Chart -->
         <div class="dashboard-card chart-card" id="card-documents-chart">
           <div class="mb-3">
@@ -94,7 +87,7 @@
         <div class="mb-4">
           <h3 class="text-base font-bold text-gray-800 m-0">Control de Trazabilidad</h3>
           <p class="text-xs text-gray-500 m-0 mt-0.5">
-            Usuarios con lecturas pendientes agrupados por documento y área
+            Usuarios con lecturas pendientes agrupados por documento
           </p>
         </div>
 
@@ -111,7 +104,7 @@
             <ng-template #header>
               <tr>
                 <th style="width: 35%">Documento</th>
-                <th style="width: 20%">Área</th>
+                <th style="width: 20%">Proceso</th>
                 <th style="width: 30%">Usuarios Pendientes</th>
                 <th style="width: 15%" class="text-center">Estado</th>
               </tr>

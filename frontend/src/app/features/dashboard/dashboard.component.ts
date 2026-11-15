@@ -254,6 +254,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       data: this.chartData,
       options: this.chartOptions,
     });
+
+    // Hide 'Obsoleto' (index 3) by default while keeping it toggleable in the legend
+    this.chartInstance.toggleDataVisibility(3);
+    this.chartInstance.update();
   }
 
   /**

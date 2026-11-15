@@ -4,6 +4,10 @@
   margin: 0 auto;
 }
 
+.dashboard-header {
+  margin-bottom: 2rem;
+}
+
 /* Analytics & Metrics Grid */
 .dashboard-analytics {
   margin-bottom: 2rem;
