@@ -31,8 +31,10 @@
 
   <!-- Data table -->
   <div class="doc-list-table-card">
-    <div class="flex justify-content-between align-items-center mb-4">
-      <h2 class="text-xl font-semibold m-0">Listado Maestro de Documentos del Sistema de Gestión de Calidad</h2>
+    <div class="flex justify-content-between align-items-center mb-2">
+      <h2 class="text-xl font-semibold m-0">
+        Listado Maestro de Documentos del Sistema de Gestión de Calidad
+      </h2>
       <div>
         <p-menu #exportMenu [popup]="true" [model]="exportMenuItems"></p-menu>
         <button
@@ -134,9 +136,7 @@
           <th pSortableColumn="title">Título <p-sort-icon field="title" /></th>
           <th pSortableColumn="version">Versión <p-sort-icon field="version" /></th>
           <th>Estado</th>
-          <th pSortableColumn="updated_at">
-            Fecha <p-sort-icon field="updated_at" />
-          </th>
+          <th pSortableColumn="updated_at">Fecha <p-sort-icon field="updated_at" /></th>
           <th class="col-actions">Acciones</th>
         </tr>
       </ng-template>

@@ -4,6 +4,34 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { signal } from '@angular/core';
 import { MessageService } from 'primeng/api';
 
+const mockSavePdf = vi.fn();
+vi.mock('jspdf', () => {
+  return {
+    default: class MockJsPDF {
+      setFontSize = vi.fn();
+      setTextColor = vi.fn();
+      text = vi.fn();
+      save = mockSavePdf;
+    },
+  };
+});
+
+const mockAutoTable = vi.fn();
+vi.mock('jspdf-autotable', () => ({
+  default: (...args: any[]) => mockAutoTable(...args),
+}));
+
+const mockWriteFile = vi.fn();
+vi.mock('xlsx', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('xlsx')>();
+  return {
+    ...actual,
+    writeFile: (...args: any[]) => mockWriteFile(...args),
+  };
+});
+
+import * as XLSX from 'xlsx';
+
 import { AuditReportsComponent } from './audit-reports.component';
 import { AuditReportService, type AuditRecord } from '../../../core/services/audit-report.service';
 import { UserService } from '../../../core/services/user.service';
@@ -328,6 +356,92 @@ describe('AuditReportsComponent', () => {
           detail: 'Connection error',
         }),
       );
+    });
+  });
+
+  describe('Export Functionality', () => {
+    it('should initialize exportMenuItems with PDF and Excel options', () => {
+      expect(component.exportMenuItems).toHaveLength(2);
+      expect(component.exportMenuItems[0].label).toBe('Exportar a PDF');
+      expect(component.exportMenuItems[1].label).toBe('Exportar a Excel');
+    });
+
+    it('should render the export button and header in template', () => {
+      const compiled = fixture.nativeElement as HTMLElement;
+      const exportBtn = compiled.querySelector('#btn-export-menu');
+      expect(exportBtn).toBeTruthy();
+
+      const headerTitle = compiled.querySelector('.audit-table-card h2');
+      expect(headerTitle?.textContent).toContain('Registro de Confirmaciones de Lectura');
+    });
+
+    it('should format read dates as DD/MM/YYYY HH:mm', () => {
+      const formatted = component.formatReadDate('2026-11-10T10:30:00Z');
+      expect(formatted).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
+      expect(component.formatReadDate(null)).toBe('—');
+    });
+
+    it('should export only filteredRecords to PDF and save file', () => {
+      mockSavePdf.mockClear();
+      mockAutoTable.mockClear();
+
+      // Apply filter so only 1 record is visible
+      component.selectedUser = 'usr-2';
+      component.applyFilters();
+      expect(component.filteredRecords).toHaveLength(1);
+
+      component.exportPdf();
+
+      expect(mockAutoTable).toHaveBeenCalled();
+      const callArgs = mockAutoTable.mock.calls[0][1];
+      expect(callArgs.head[0]).toEqual([
+        'Documento',
+        'Área / Proceso',
+        'Usuario',
+        'Rol',
+        'Fecha de Lectura',
+      ]);
+      expect(callArgs.body).toHaveLength(1);
+      expect(callArgs.body[0][0]).toContain('SGC-PR-002');
+      expect(callArgs.body[0][2]).toBe('María López');
+      expect(callArgs.body[0][3]).toBe('Revisor');
+      expect(mockSavePdf).toHaveBeenCalledWith('reporte-auditoria-lecturas.pdf');
+    });
+
+    it('should export only filteredRecords to Excel and call writeFile', () => {
+      mockWriteFile.mockClear();
+      const jsonToSheetSpy = vi.spyOn(XLSX.utils, 'json_to_sheet');
+
+      // Apply filter
+      component.selectedArea = 'calidad';
+      component.applyFilters();
+      expect(component.filteredRecords).toHaveLength(1);
+
+      component.exportExcel();
+
+      expect(jsonToSheetSpy).toHaveBeenCalled();
+      const exportedData = jsonToSheetSpy.mock.calls[0][0] as any[];
+      expect(exportedData).toHaveLength(1);
+      expect(exportedData[0]['Documento']).toContain('SGC-PR-002');
+      expect(exportedData[0]['Usuario']).toBe('María López');
+      expect(exportedData[0]['Rol']).toBe('Revisor');
+      expect(exportedData[0]).toHaveProperty('Fecha de Lectura');
+
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        expect.anything(),
+        'reporte-auditoria-lecturas.xlsx',
+      );
+    });
+
+    it('should trigger exportPdf and exportExcel when menu items command is executed', () => {
+      const exportPdfSpy = vi.spyOn(component, 'exportPdf').mockImplementation(() => {});
+      const exportExcelSpy = vi.spyOn(component, 'exportExcel').mockImplementation(() => {});
+
+      component.exportMenuItems[0].command?.({} as any);
+      expect(exportPdfSpy).toHaveBeenCalled();
+
+      component.exportMenuItems[1].command?.({} as any);
+      expect(exportExcelSpy).toHaveBeenCalled();
     });
   });
 });

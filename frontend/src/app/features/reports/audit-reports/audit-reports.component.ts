@@ -7,7 +7,11 @@ import { DatePicker } from 'primeng/datepicker';
 import { ButtonDirective } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
-import { MessageService } from 'primeng/api';
+import { MenuModule } from 'primeng/menu';
+import { MenuItem, MessageService } from 'primeng/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 import { AuditReportService, type AuditRecord } from '../../../core/services/audit-report.service';
 import { UserService } from '../../../core/services/user.service';
@@ -41,6 +45,7 @@ export interface DropdownOption<T = string | null> {
     ButtonDirective,
     TagModule,
     ToastModule,
+    MenuModule,
   ],
   providers: [MessageService],
 })
@@ -58,6 +63,9 @@ export class AuditReportsComponent implements OnInit {
   /** Loading state indicator for queries and filtering operations. */
   loading = signal<boolean>(false);
 
+  /** Menu items for export options popup menu. */
+  exportMenuItems: MenuItem[] = [];
+
   // Filters State
   dateFrom: Date | null = null;
   dateTo: Date | null = null;
@@ -74,6 +82,18 @@ export class AuditReportsComponent implements OnInit {
   userOptions: DropdownOption[] = [{ label: 'Todos los usuarios', value: null }];
 
   async ngOnInit(): Promise<void> {
+    this.exportMenuItems = [
+      {
+        label: 'Exportar a PDF',
+        icon: 'pi pi-file-pdf',
+        command: () => this.exportPdf(),
+      },
+      {
+        label: 'Exportar a Excel',
+        icon: 'pi pi-file-excel',
+        command: () => this.exportExcel(),
+      },
+    ];
     await this.loadData();
   }
 
@@ -239,5 +259,86 @@ export class AuditReportsComponent implements OnInit {
       default:
         return 'secondary';
     }
+  }
+
+  /**
+   * Formats a date string into DD/MM/YYYY HH:mm for exports and reports.
+   */
+  formatReadDate(dateStr: string | null | undefined): string {
+    if (!dateStr) return '—';
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return '—';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  }
+
+  /**
+   * Exports currently filtered audit records into a PDF file using jsPDF and jspdf-autotable.
+   */
+  exportPdf(): void {
+    const records = this.filteredRecords;
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.setTextColor(136, 19, 55);
+    doc.text('Registro de Confirmaciones de Lectura de Documentos', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Fecha de exportación: ${new Date().toLocaleDateString('es-ES')}`, 14, 25);
+    doc.text(`Total de registros: ${records.length}`, 14, 30);
+
+    const head = [['Documento', 'Proceso', 'Usuario', 'Rol', 'Fecha de Lectura']];
+    const body = records.map((r) => [
+      `${r.doc_code || ''} - ${r.doc_title || ''}`,
+      this.getProcessAreaLabel(r.process_area),
+      r.user_name || '—',
+      this.mapRoleToSpanish(r.user_role),
+      this.formatReadDate(r.read_at),
+    ]);
+
+    autoTable(doc, {
+      head,
+      body,
+      startY: 35,
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        overflow: 'linebreak',
+      },
+      headStyles: {
+        fillColor: [136, 19, 55],
+        textColor: 255,
+        fontStyle: 'bold',
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+    });
+
+    doc.save('reporte-auditoria-lecturas.pdf');
+  }
+
+  /**
+   * Exports currently filtered audit records into an Excel (.xlsx) spreadsheet using xlsx.
+   */
+  exportExcel(): void {
+    const records = this.filteredRecords;
+    const data = records.map((r) => ({
+      Documento: `${r.doc_code || ''} - ${r.doc_title || ''}`,
+      Proceso: this.getProcessAreaLabel(r.process_area),
+      Usuario: r.user_name || '—',
+      Rol: this.mapRoleToSpanish(r.user_role),
+      'Fecha de Lectura': this.formatReadDate(r.read_at),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Confirmaciones de Lectura');
+    XLSX.writeFile(workbook, 'reporte-auditoria-lecturas.xlsx');
   }
 }
