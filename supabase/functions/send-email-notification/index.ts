@@ -53,6 +53,8 @@ interface ResendEmailPayload {
 function buildEmailSubject(notificationType: string): string {
   const subjects: Record<string, string> = {
     REVIEW_REQUIRED: "Acción requerida: Documento pendiente de revisión",
+    APPROVAL_REQUIRED:
+      "Acción requerida: Documento revisado pendiente de aprobación",
     DOCUMENT_APPROVED: "Nuevo documento aprobado disponible en el SGC",
     READ_RECEIPT_REQUIRED: "Acción requerida: Confirmar lectura de documento",
   };
@@ -199,7 +201,7 @@ serve(async (req: Request): Promise<Response> => {
 
     recipientEmail = userData.email;
     console.log(
-      `[send-email-notification] Resolved recipient: ${userData.full_name} <${recipientEmail}>`,
+      `[send-email-notification] Resolved recipient for user_id=${record.user_id}`,
     );
   } catch (err) {
     console.error(

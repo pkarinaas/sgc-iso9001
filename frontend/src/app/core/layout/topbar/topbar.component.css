@@ -67,6 +67,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
   width: 2.25rem;
   height: 2.25rem;
   padding: 0;
@@ -81,6 +82,169 @@
 .topbar-action-btn:hover {
   background-color: #f3f4f6 !important;
   color: #881337 !important;
+}
+
+/* Notification Bell & Unread Badge */
+.notification-bell-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-count-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  background-color: #dc2626;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  pointer-events: none;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+/* Notifications Popover Panel */
+.notifications-panel {
+  width: 100%;
+  background-color: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.notifications-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #f1e4e8;
+  background-color: #ffffff;
+}
+
+.notifications-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.btn-mark-all-read {
+  background: transparent;
+  border: none;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  color: #881337;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-mark-all-read:hover {
+  background-color: #fff1f2;
+}
+
+.notifications-body {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f1e4e8;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item:hover {
+  background-color: #f8fafc;
+}
+
+.notification-item--unread {
+  background-color: #fff1f2;
+}
+
+.notification-item--unread:hover {
+  background-color: #ffe4e6;
+}
+
+.notification-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-message {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: #64748b;
+  font-weight: 400;
+  word-break: break-word;
+}
+
+.notification-item--unread .notification-message {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.notification-timestamp {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.notification-unread-dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 9999px;
+  background-color: #881337;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+}
+
+.notifications-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.notifications-empty-icon {
+  font-size: 1.75rem;
+  color: #94a3b8;
+}
+
+.notifications-empty-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
 }
 
 /* User Profile Badge */
