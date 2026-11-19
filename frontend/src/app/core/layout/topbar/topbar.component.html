@@ -18,20 +18,94 @@
 
   <!-- Right Side: Action buttons and User Profile -->
   <div class="topbar-right">
-    <!-- Notification Bell Button -->
-    <button
-      id="btn-notifications"
-      type="button"
-      pButton
-      icon="pi pi-bell"
-      class="p-button-rounded p-button-text topbar-action-btn"
-      pTooltip="Notificaciones"
-      tooltipPosition="bottom"
-      aria-label="Notificaciones"
-      (click)="onNotificationsClick()"
+    <!-- Notification Bell Button & Unread Counter -->
+    <div class="notification-bell-wrapper">
+      <button
+        id="btn-notifications"
+        type="button"
+        pButton
+        icon="pi pi-bell"
+        class="p-button-rounded p-button-text topbar-action-btn"
+        pTooltip="Notificaciones"
+        tooltipPosition="bottom"
+        aria-label="Notificaciones"
+        (click)="notificationsPopover.toggle($event); onNotificationsClick()"
+      >
+        <i class="pi pi-bell text-lg"></i>
+      </button>
+      @if (unreadCount() > 0) {
+        <span
+          id="notifications-badge"
+          class="notification-count-badge"
+          aria-label="Notificaciones no leídas"
+        >
+          {{ formattedUnreadCount() }}
+        </span>
+      }
+    </div>
+
+    <!-- Notifications Popover Panel -->
+    <p-popover
+      #notificationsPopover
+      styleClass="notifications-popover"
+      [style]="{
+        width: '360px',
+        maxWidth: 'calc(100vw - 1.5rem)',
+        background: '#ffffff',
+        border: '1px solid #f1e4e8',
+        borderRadius: '12px',
+        '--p-popover-background': '#ffffff',
+        '--p-popover-border-color': '#f1e4e8',
+        '--p-popover-border-radius': '12px',
+        '--p-popover-content-padding': '0'
+      }"
+      [pt]="{ content: { style: { padding: '0' } } }"
     >
-      <i class="pi pi-bell text-lg"></i>
-    </button>
+      <div class="notifications-panel">
+        <div class="notifications-header">
+          <h3 class="notifications-title">Notificaciones</h3>
+          @if (unreadCount() > 0) {
+            <button
+              id="btn-mark-all-read"
+              type="button"
+              class="btn-mark-all-read"
+              (click)="onMarkAllAsRead()"
+            >
+              Marcar todas como leídas
+            </button>
+          }
+        </div>
+
+        <div class="notifications-body">
+          @for (item of notificationItems(); track item.id) {
+            <div
+              class="notification-item"
+              [class.notification-item--unread]="!item.is_read"
+              role="button"
+              tabindex="0"
+              (click)="onNotificationItemClick(item)"
+              (keydown.enter)="onNotificationItemClick(item)"
+              (keydown.space)="onNotificationItemClick(item); $event.preventDefault()"
+            >
+              <div class="notification-item-content">
+                <p class="notification-message">{{ item.message }}</p>
+                <span class="notification-timestamp">
+                  {{ item.created_at | date: 'dd/MM/yyyy HH:mm' }}
+                </span>
+              </div>
+              @if (!item.is_read) {
+                <span class="notification-unread-dot" aria-hidden="true"></span>
+              }
+            </div>
+          } @empty {
+            <div class="notifications-empty">
+              <i class="pi pi-bell-slash notifications-empty-icon" aria-hidden="true"></i>
+              <p class="notifications-empty-text">No tienes notificaciones.</p>
+            </div>
+          }
+        </div>
+      </div>
+    </p-popover>
 
     <!-- Help / Tutorial Button -->
     <button

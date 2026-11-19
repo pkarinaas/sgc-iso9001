@@ -396,7 +396,7 @@ describe('AuditReportsComponent', () => {
       const callArgs = mockAutoTable.mock.calls[0][1];
       expect(callArgs.head[0]).toEqual([
         'Documento',
-        'Área / Proceso',
+        'Proceso',
         'Usuario',
         'Rol',
         'Fecha de Lectura',

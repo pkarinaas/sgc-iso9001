@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { signal } from '@angular/core';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { computed, signal } from '@angular/core';
 import { TopbarComponent } from './topbar.component';
 import { AuthService } from '../../services/auth.service';
+import { NotificationService, type AppNotification } from '../../services/notification.service';
 import type { User } from '../../models/user.model';
 
 describe('TopbarComponent', () => {
@@ -31,11 +32,53 @@ describe('TopbarComponent', () => {
     currentUser: ReturnType<typeof signal<User | null>>;
   };
 
+  let notificationServiceMock: {
+    notifications: ReturnType<typeof signal<AppNotification[]>>;
+    unreadCount: ReturnType<typeof computed<number>>;
+    markAsRead: ReturnType<typeof vi.fn>;
+    markAllAsRead: ReturnType<typeof vi.fn>;
+  };
+
+  const makeNotifications = (unread: number, read = 0): AppNotification[] => {
+    const items: AppNotification[] = [];
+    for (let i = 0; i < unread; i++) {
+      items.push({
+        id: `unread-${i + 1}`,
+        user_id: 'usr-456',
+        document_id: i + 1,
+        type: 'REVIEW_REQUIRED',
+        message: `Notificación sin leer ${i + 1}`,
+        is_read: false,
+        created_at: '2026-11-18T14:30:00Z',
+      });
+    }
+    for (let j = 0; j < read; j++) {
+      items.push({
+        id: `read-${j + 1}`,
+        user_id: 'usr-456',
+        document_id: 100 + j,
+        type: 'DOCUMENT_APPROVED',
+        message: `Notificación leída ${j + 1}`,
+        is_read: true,
+        created_at: '2026-11-17T09:15:00Z',
+      });
+    }
+    return items;
+  };
+
   beforeEach(async () => {
     authServiceMock = {
       getCurrentUserProfile: vi.fn().mockResolvedValue({ ...mockUser }),
       userRole: signal('ADMIN'),
       currentUser: signal({ ...mockUser }),
+    };
+
+    const notificationsSignal = signal<AppNotification[]>([]);
+    notificationServiceMock = {
+      notifications: notificationsSignal,
+      unreadCount: computed(() => notificationsSignal().filter((n) => !n.is_read).length),
+      markAsRead: vi.fn().mockResolvedValue(undefined),
+      markAllAsRead: vi.fn().mockResolvedValue(undefined),
     };
 
     await TestBed.configureTestingModule({
@@ -46,12 +89,20 @@ describe('TopbarComponent', () => {
           provide: AuthService,
           useValue: authServiceMock,
         },
+        {
+          provide: NotificationService,
+          useValue: notificationServiceMock,
+        },
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TopbarComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    fixture.destroy();
   });
 
   it('should create the topbar component', () => {
@@ -116,6 +167,150 @@ describe('TopbarComponent', () => {
 
       bellBtn.click();
       expect(notificationsSpy).toHaveBeenCalledOnce();
+    });
+
+    describe('Realtime notifications badge', () => {
+      it('should not display notification badge when unreadCount is 0', () => {
+        notificationServiceMock.notifications.set(makeNotifications(0, 2));
+        fixture.detectChanges();
+
+        const badge = fixture.nativeElement.querySelector('#notifications-badge');
+        expect(badge).toBeNull();
+      });
+
+      it('should render badge as a sibling inside .notification-bell-wrapper for single and double digits', () => {
+        notificationServiceMock.notifications.set(makeNotifications(1));
+        fixture.detectChanges();
+
+        const wrapper = fixture.nativeElement.querySelector('.notification-bell-wrapper');
+        const bellBtn = fixture.nativeElement.querySelector('#btn-notifications') as HTMLButtonElement;
+        let badge = wrapper?.querySelector('#notifications-badge') as HTMLElement | null;
+
+        expect(wrapper).toBeTruthy();
+        expect(badge).toBeTruthy();
+        expect(badge?.textContent?.trim()).toBe('1');
+        expect(bellBtn.querySelector('#notifications-badge')).toBeNull();
+
+        notificationServiceMock.notifications.set(makeNotifications(12));
+        fixture.detectChanges();
+
+        badge = wrapper?.querySelector('#notifications-badge') as HTMLElement | null;
+        expect(badge?.textContent?.trim()).toBe('12');
+      });
+
+      it('should cap badge text at 99+ when unreadCount exceeds 99', () => {
+        notificationServiceMock.notifications.set(makeNotifications(105));
+        fixture.detectChanges();
+
+        const badge = fixture.nativeElement.querySelector('#notifications-badge') as HTMLElement | null;
+        expect(badge).toBeTruthy();
+        expect(badge?.textContent?.trim()).toBe('99+');
+      });
+
+      it('should dynamically hide badge when all notifications become read', () => {
+        notificationServiceMock.notifications.set(makeNotifications(1));
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.querySelector('#notifications-badge')).toBeTruthy();
+
+        notificationServiceMock.notifications.set(makeNotifications(0, 1));
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.querySelector('#notifications-badge')).toBeNull();
+      });
+    });
+
+    describe('Notifications popover', () => {
+      it('should open popover on bell click and render empty state when there are no notifications', async () => {
+        const bellBtn = fixture.nativeElement.querySelector('#btn-notifications') as HTMLButtonElement;
+        bellBtn.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const panel = document.querySelector('.notifications-panel') as HTMLElement | null;
+        expect(panel).toBeTruthy();
+        expect(panel?.querySelector('.notifications-title')?.textContent?.trim()).toBe(
+          'Notificaciones',
+        );
+        expect(panel?.querySelector('#btn-mark-all-read')).toBeNull();
+        expect(panel?.querySelector('.notifications-empty .pi-bell-slash')).toBeTruthy();
+        expect(panel?.querySelector('.notifications-empty-text')?.textContent?.trim()).toBe(
+          'No tienes notificaciones.',
+        );
+      });
+
+      it('should render unread and read notifications with formatted timestamps and unread indicators', async () => {
+        notificationServiceMock.notifications.set(makeNotifications(1, 1));
+        fixture.detectChanges();
+
+        const bellBtn = fixture.nativeElement.querySelector('#btn-notifications') as HTMLButtonElement;
+        bellBtn.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const panel = document.querySelector('.notifications-panel') as HTMLElement | null;
+        expect(panel).toBeTruthy();
+        expect(panel?.querySelector('#btn-mark-all-read')?.textContent?.trim()).toBe(
+          'Marcar todas como leídas',
+        );
+
+        const items = panel?.querySelectorAll('.notification-item') ?? [];
+        expect(items.length).toBe(2);
+
+        const unreadItem = items[0] as HTMLElement;
+        expect(unreadItem.classList.contains('notification-item--unread')).toBe(true);
+        expect(unreadItem.querySelector('.notification-message')?.textContent?.trim()).toBe(
+          'Notificación sin leer 1',
+        );
+        expect(unreadItem.querySelector('.notification-timestamp')?.textContent?.trim()).toMatch(
+          /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/,
+        );
+        expect(unreadItem.querySelector('.notification-unread-dot')).toBeTruthy();
+
+        const readItem = items[1] as HTMLElement;
+        expect(readItem.classList.contains('notification-item--unread')).toBe(false);
+        expect(readItem.querySelector('.notification-message')?.textContent?.trim()).toBe(
+          'Notificación leída 1',
+        );
+        expect(readItem.querySelector('.notification-unread-dot')).toBeNull();
+      });
+
+      it('should call markAsRead only when clicking an unread notification item', async () => {
+        notificationServiceMock.notifications.set(makeNotifications(1, 1));
+        fixture.detectChanges();
+
+        const bellBtn = fixture.nativeElement.querySelector('#btn-notifications') as HTMLButtonElement;
+        bellBtn.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const items = document.querySelectorAll('.notification-item');
+        (items[1] as HTMLElement).click();
+        expect(notificationServiceMock.markAsRead).not.toHaveBeenCalled();
+
+        (items[0] as HTMLElement).click();
+        expect(notificationServiceMock.markAsRead).toHaveBeenCalledWith('unread-1');
+      });
+
+      it('should call markAllAsRead when clicking "Marcar todas como leídas"', async () => {
+        notificationServiceMock.notifications.set(makeNotifications(2));
+        fixture.detectChanges();
+
+        const bellBtn = fixture.nativeElement.querySelector('#btn-notifications') as HTMLButtonElement;
+        bellBtn.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const markAllBtn = document.querySelector('#btn-mark-all-read') as HTMLButtonElement | null;
+        expect(markAllBtn).toBeTruthy();
+        markAllBtn?.click();
+
+        expect(notificationServiceMock.markAllAsRead).toHaveBeenCalledOnce();
+      });
     });
 
     it('should render the help button with pi-question-circle icon', () => {
