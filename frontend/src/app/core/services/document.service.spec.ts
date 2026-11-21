@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { DocumentService } from './document.service';
 import { supabase } from '../supabase/supabase.client';
+import type { Document } from '../models/document.model';
 
 describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
   let service: DocumentService;
@@ -491,6 +492,222 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       await expect(service.getDashboardMetrics()).rejects.toThrow(
         'Error al obtener métricas del dashboard',
       );
+    });
+  });
+
+  describe('retryDriveSync', () => {
+    const sampleDocs: Document[] = [
+      {
+        id: '101',
+        code: 'PE-01',
+        title: 'Procesamiento Analítico',
+        version: 0,
+        status: 'APPROVED',
+        process_area: 'laboratorio',
+        file_url: 'https://storage.supabase.com/sgc-files/pe01.pdf',
+        creator_id: 'usr-1',
+        drive_sync_status: 'ERROR',
+        drive_sync_error: 'Timeout uploading to Drive',
+        created_at: '2026-11-18T10:00:00Z',
+        updated_at: '2026-11-18T10:00:00Z',
+      },
+    ];
+
+    it('should update local documents signal to PENDING immediately and persist in Supabase', async () => {
+      const loadOrderMock = vi.fn().mockResolvedValueOnce({ data: sampleDocs, error: null });
+      const loadSelectMock = vi.fn().mockReturnValue({ order: loadOrderMock });
+
+      const eqMock = vi.fn().mockResolvedValueOnce({ error: null });
+      const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+
+      const fromSpy = vi
+        .spyOn(supabase, 'from')
+        .mockReturnValueOnce({ select: loadSelectMock } as unknown as ReturnType<typeof supabase.from>)
+        .mockReturnValueOnce({ update: updateMock } as unknown as ReturnType<typeof supabase.from>);
+
+      await service.loadDocuments();
+      await service.retryDriveSync('101');
+
+      expect(fromSpy).toHaveBeenLastCalledWith('documents');
+      expect(updateMock).toHaveBeenCalledWith({
+        drive_sync_status: 'PENDING',
+        drive_sync_error: null,
+      });
+      expect(eqMock).toHaveBeenCalledWith('id', '101');
+      expect(service.documents()[0].drive_sync_status).toBe('PENDING');
+      expect(service.documents()[0].drive_sync_error).toBeNull();
+    });
+
+    it('should roll back local signal state and throw translated error when Supabase update fails', async () => {
+      const loadOrderMock = vi.fn().mockResolvedValueOnce({ data: sampleDocs, error: null });
+      const loadSelectMock = vi.fn().mockReturnValue({ order: loadOrderMock });
+
+      const eqMock = vi.fn().mockResolvedValueOnce({
+        error: { message: 'row-level security policy violated' },
+      });
+      const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+
+      vi.spyOn(supabase, 'from')
+        .mockReturnValueOnce({ select: loadSelectMock } as unknown as ReturnType<typeof supabase.from>)
+        .mockReturnValueOnce({ update: updateMock } as unknown as ReturnType<typeof supabase.from>);
+
+      await service.loadDocuments();
+
+      await expect(service.retryDriveSync('101')).rejects.toThrow(
+        'No se pudo iniciar el reintento de respaldo: No tienes permisos para realizar esta operación en la base de datos.',
+      );
+
+      expect(service.documents()[0].drive_sync_status).toBe('ERROR');
+      expect(service.documents()[0].drive_sync_error).toBe('Timeout uploading to Drive');
+    });
+  });
+
+  describe('updateDocumentStatus', () => {
+    it('should include PENDING drive_sync_status and clear drive_sync_error when approving a document', async () => {
+      const eqMock = vi.fn().mockResolvedValueOnce({ error: null });
+      const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+      vi.spyOn(supabase, 'from').mockReturnValueOnce({
+        update: updateMock,
+      } as unknown as ReturnType<typeof supabase.from>);
+
+      await service.updateDocumentStatus('101', 'APPROVED');
+
+      expect(supabase.from).toHaveBeenCalledWith('documents');
+      expect(updateMock).toHaveBeenCalledWith({
+        status: 'APPROVED',
+        drive_sync_status: 'PENDING',
+        drive_sync_error: null,
+      });
+      expect(eqMock).toHaveBeenCalledWith('id', '101');
+    });
+
+    it('should send only status when transitioning to REVIEWED', async () => {
+      const eqMock = vi.fn().mockResolvedValueOnce({ error: null });
+      const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+      vi.spyOn(supabase, 'from').mockReturnValueOnce({
+        update: updateMock,
+      } as unknown as ReturnType<typeof supabase.from>);
+
+      await service.updateDocumentStatus('101', 'REVIEWED');
+
+      expect(updateMock).toHaveBeenCalledWith({ status: 'REVIEWED' });
+      expect(eqMock).toHaveBeenCalledWith('id', '101');
+    });
+  });
+
+  describe('getDriveSyncStatus & updateLocalDriveSyncState', () => {
+    const sampleDocs: Document[] = [
+      {
+        id: '101',
+        code: 'PE-01',
+        title: 'Procesamiento Analítico',
+        version: 0,
+        status: 'APPROVED',
+        process_area: 'laboratorio',
+        file_url: 'https://storage.supabase.com/sgc-files/pe01.pdf',
+        creator_id: 'usr-1',
+        drive_sync_status: 'PENDING',
+        drive_sync_error: null,
+        created_at: '2026-11-18T10:00:00Z',
+        updated_at: '2026-11-18T10:00:00Z',
+      },
+      {
+        id: '102',
+        code: 'PE-02',
+        title: 'Control Documental',
+        version: 1,
+        status: 'APPROVED',
+        process_area: 'calidad',
+        file_url: 'https://storage.supabase.com/sgc-files/pe02.pdf',
+        creator_id: 'usr-1',
+        drive_sync_status: null,
+        created_at: '2026-11-18T10:00:00Z',
+        updated_at: '2026-11-18T10:00:00Z',
+      },
+    ];
+
+    it('should query Drive sync fields for a document and return a normalized snapshot', async () => {
+      const singleMock = vi.fn().mockResolvedValueOnce({
+        data: {
+          drive_sync_status: 'SYNCED',
+          drive_file_id: 'drive-file-999',
+          drive_sync_error: null,
+          drive_synced_at: '2026-11-20T20:15:00Z',
+        },
+        error: null,
+      });
+      const eqMock = vi.fn().mockReturnValue({ single: singleMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+
+      vi.spyOn(supabase, 'from').mockReturnValueOnce({
+        select: selectMock,
+      } as unknown as ReturnType<typeof supabase.from>);
+
+      const snapshot = await service.getDriveSyncStatus('101');
+
+      expect(supabase.from).toHaveBeenCalledWith('documents');
+      expect(selectMock).toHaveBeenCalledWith(
+        'drive_sync_status, drive_file_id, drive_sync_error, drive_synced_at',
+      );
+      expect(eqMock).toHaveBeenCalledWith('id', '101');
+      expect(singleMock).toHaveBeenCalledOnce();
+      expect(snapshot).toEqual({
+        drive_sync_status: 'SYNCED',
+        drive_file_id: 'drive-file-999',
+        drive_sync_error: null,
+        drive_synced_at: '2026-11-20T20:15:00Z',
+      });
+    });
+
+    it('should return null when polling Drive sync status fails', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const singleMock = vi.fn().mockResolvedValueOnce({
+        data: null,
+        error: { message: 'network timeout' },
+      });
+      const eqMock = vi.fn().mockReturnValue({ single: singleMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+
+      vi.spyOn(supabase, 'from').mockReturnValueOnce({
+        select: selectMock,
+      } as unknown as ReturnType<typeof supabase.from>);
+
+      const snapshot = await service.getDriveSyncStatus('101');
+
+      expect(snapshot).toBeNull();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Error polling Google Drive sync status:',
+        'network timeout',
+      );
+    });
+
+    it('should update only the target document in the local documents signal', async () => {
+      const loadOrderMock = vi.fn().mockResolvedValueOnce({ data: sampleDocs, error: null });
+      const loadSelectMock = vi.fn().mockReturnValue({ order: loadOrderMock });
+
+      vi.spyOn(supabase, 'from').mockReturnValueOnce({
+        select: loadSelectMock,
+      } as unknown as ReturnType<typeof supabase.from>);
+
+      await service.loadDocuments();
+
+      service.updateLocalDriveSyncState('101', {
+        drive_sync_status: 'SYNCED',
+        drive_file_id: 'drive-file-101',
+        drive_sync_error: 'stale error',
+        drive_synced_at: '2026-11-20T20:30:00Z',
+      });
+
+      expect(service.documents()[0]).toEqual(
+        expect.objectContaining({
+          id: '101',
+          drive_sync_status: 'SYNCED',
+          drive_file_id: 'drive-file-101',
+          drive_sync_error: null,
+          drive_synced_at: '2026-11-20T20:30:00Z',
+        }),
+      );
+      expect(service.documents()[1]).toEqual(sampleDocs[1]);
     });
   });
 });
