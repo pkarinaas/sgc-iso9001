@@ -2,6 +2,7 @@ import { inject, signal, computed, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import type { Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../supabase/supabase.client';
+import type { User } from '../models/user.model';
 
 export interface SignInResult {
   session: Session | null;
@@ -49,6 +50,12 @@ export class AuthService {
   /** Public read-only view of the current user's role. */
   readonly userRole = this._userRole.asReadonly();
 
+  /** Writable signal holding the current user profile data. */
+  private readonly _currentUser = signal<User | null>(null);
+
+  /** Public read-only view of the current user profile data. */
+  readonly currentUser = this._currentUser.asReadonly();
+
   /**
    * Promise that resolves once the initial `getSession()` call completes.
    */
@@ -73,6 +80,7 @@ export class AuthService {
       this._session.set(session);
       if (!session) {
         this._userRole.set(null);
+        this._currentUser.set(null);
       }
       this._initialized.set(true);
     });
@@ -155,13 +163,18 @@ export class AuthService {
 
   /**
    * Retrieves the current user's profile from public.users including assigned_processes.
+   * Caches the value in the `_currentUser` signal.
    *
    * @returns The User object or null if unauthenticated or not found.
    */
-  async getCurrentUserProfile(): Promise<any | null> {
+  async getCurrentUserProfile(): Promise<User | null> {
+    if (this._currentUser()) {
+      return this._currentUser();
+    }
     await this.waitForInitialization();
     const session = this._session();
     if (!session?.user) {
+      this._currentUser.set(null);
       return null;
     }
 
@@ -175,11 +188,23 @@ export class AuthService {
         .single();
 
       if (error || !data) {
+        this._currentUser.set(null);
         return null;
       }
 
-      return data;
+      const roleName = Array.isArray(data.roles)
+        ? data.roles[0]?.name
+        : (data.roles as any)?.name;
+
+      if (roleName) {
+        this._userRole.set(roleName);
+      }
+
+      const profile = data as unknown as User;
+      this._currentUser.set(profile);
+      return profile;
     } catch {
+      this._currentUser.set(null);
       return null;
     }
   }
@@ -189,6 +214,7 @@ export class AuthService {
     await supabase.auth.signOut();
     this._session.set(null);
     this._userRole.set(null);
+    this._currentUser.set(null);
     await this.router.navigate(['/login']);
   }
 }

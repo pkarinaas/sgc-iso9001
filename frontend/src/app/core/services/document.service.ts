@@ -1,6 +1,11 @@
 import { Injectable, signal } from '@angular/core';
 import { supabase } from '../supabase/supabase.client';
-import type { Document, DocumentStatus } from '../models/document.model';
+import type {
+  Document,
+  DocumentStatus,
+  DriveSyncSnapshot,
+  DriveSyncStatus,
+} from '../models/document.model';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 
 /**
@@ -55,7 +60,16 @@ export class DocumentService {
    * @throws Error with message if DB update fails.
    */
   async updateDocumentStatus(id: number | string, status: DocumentStatus): Promise<void> {
-    const { error } = await supabase.from('documents').update({ status }).eq('id', id);
+    const updatePayload: {
+      status: DocumentStatus;
+      drive_sync_status?: DriveSyncStatus;
+      drive_sync_error?: null;
+    } =
+      status === 'APPROVED'
+        ? { status, drive_sync_status: 'PENDING', drive_sync_error: null }
+        : { status };
+
+    const { error } = await supabase.from('documents').update(updatePayload).eq('id', id);
 
     if (error) {
       throw new Error(
@@ -93,6 +107,96 @@ export class DocumentService {
         `Error al actualizar el documento: ${this.translateDatabaseError(error.message)}`,
       );
     }
+  }
+
+  /**
+   * Resets a document's Google Drive synchronization status to `'PENDING'` in `public.documents`
+   * so the database webhook re-triggers a backup upload, while optimistically updating local state.
+   *
+   * @param documentId - The ID of the document to retry syncing.
+   * @throws Error with translated details if the Supabase update fails.
+   */
+  async retryDriveSync(documentId: number | string): Promise<void> {
+    const previousDocuments = this._documents();
+    const targetId = String(documentId);
+
+    this._documents.update((docs) =>
+      docs.map((doc) =>
+        String(doc.id) === targetId
+          ? { ...doc, drive_sync_status: 'PENDING', drive_sync_error: null }
+          : doc,
+      ),
+    );
+
+    const { error } = await supabase
+      .from('documents')
+      .update({
+        drive_sync_status: 'PENDING',
+        drive_sync_error: null,
+      })
+      .eq('id', documentId);
+
+    if (error) {
+      this._documents.set(previousDocuments);
+      throw new Error(
+        `No se pudo iniciar el reintento de respaldo: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+  }
+
+  /**
+   * Fetches the latest Google Drive backup status columns for a single document.
+   * Returns `null` if the query fails so callers can safely continue or stop polling.
+   *
+   * @param documentId - The ID of the document to query.
+   * @returns Latest Drive sync tracking snapshot, or `null` on error.
+   */
+  async getDriveSyncStatus(documentId: number | string): Promise<DriveSyncSnapshot | null> {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('drive_sync_status, drive_file_id, drive_sync_error, drive_synced_at')
+      .eq('id', documentId)
+      .single();
+
+    if (error || !data) {
+      if (error) {
+        console.error('Error polling Google Drive sync status:', error.message);
+      }
+      return null;
+    }
+
+    const row = data as Partial<DriveSyncSnapshot>;
+    return {
+      drive_sync_status: (row.drive_sync_status ?? null) as DriveSyncStatus | null,
+      drive_file_id: row.drive_file_id ?? null,
+      drive_sync_error: row.drive_sync_error ?? null,
+      drive_synced_at: row.drive_synced_at ?? null,
+    };
+  }
+
+  /**
+   * Patches a single document row inside the local `documents` signal with fresh
+   * Google Drive synchronization fields without reloading the full table.
+   *
+   * @param documentId - The ID of the document to patch.
+   * @param snapshot - Latest Drive sync fields retrieved from Supabase.
+   */
+  updateLocalDriveSyncState(documentId: number | string, snapshot: DriveSyncSnapshot): void {
+    const targetId = String(documentId);
+    this._documents.update((docs) =>
+      docs.map((doc) =>
+        String(doc.id) === targetId
+          ? {
+              ...doc,
+              drive_sync_status: snapshot.drive_sync_status,
+              drive_file_id: snapshot.drive_file_id,
+              drive_sync_error:
+                snapshot.drive_sync_status === 'SYNCED' ? null : snapshot.drive_sync_error,
+              drive_synced_at: snapshot.drive_synced_at,
+            }
+          : doc,
+      ),
+    );
   }
 
   /**
@@ -160,6 +264,24 @@ export class DocumentService {
     if (error) {
       throw new Error(
         `Error al registrar confirmación de lectura: ${this.translateDatabaseError(error.message)}`,
+      );
+    }
+
+    return data;
+  }
+
+  /**
+   * Fetches aggregated metrics for the dashboard via the get_dashboard_metrics RPC.
+   *
+   * @returns Aggregated metrics payload containing documentsByStatus and totalAcknowledgements.
+   * @throws Error if the RPC execution fails.
+   */
+  async getDashboardMetrics(): Promise<any> {
+    const { data, error } = await this.supabase.rpc('get_dashboard_metrics');
+
+    if (error) {
+      throw new Error(
+        `Error al obtener métricas del dashboard: ${this.translateDatabaseError(error.message)}`,
       );
     }
 

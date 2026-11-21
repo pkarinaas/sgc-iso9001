@@ -2,13 +2,13 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
+  DestroyRef,
   HostListener,
   inject,
   OnInit,
   signal,
   ViewChild,
 } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import {
   FormsModule,
   ReactiveFormsModule,
@@ -17,10 +17,18 @@ import {
   AbstractControl,
   ValidationErrors,
 } from '@angular/forms';
-import { MessageService, FilterService, ConfirmationService, SharedModule } from 'primeng/api';
+import {
+  MessageService,
+  FilterService,
+  ConfirmationService,
+  SharedModule,
+  MenuItem,
+} from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonDirective } from 'primeng/button';
+import { Ripple } from 'primeng/ripple';
+import { MenuModule } from 'primeng/menu';
 import { InputTextModule } from 'primeng/inputtext';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
@@ -33,9 +41,17 @@ import { ToastModule } from 'primeng/toast';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { Tooltip } from 'primeng/tooltip';
 import { NgxExtendedPdfViewerModule } from 'ngx-extended-pdf-viewer';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
-import type { Document, DocumentStatus } from '../../../core/models/document.model';
+import type {
+  Document,
+  DocumentStatus,
+  DriveSyncSnapshot,
+} from '../../../core/models/document.model';
 import { PROCESS_AREAS } from '../../../core/constants/process-area.constant';
 
 interface DateRangeFilter {
@@ -57,12 +73,13 @@ interface DateRangeFilter {
   templateUrl: './document-list.html',
   styleUrl: './document-list.css',
   imports: [
-    DatePipe,
     FormsModule,
     ReactiveFormsModule,
     TableModule,
     TagModule,
     ButtonDirective,
+    Ripple,
+    MenuModule,
     InputTextModule,
     IconFieldModule,
     InputIconModule,
@@ -82,14 +99,45 @@ export class DocumentListComponent implements OnInit {
   readonly authService = inject(AuthService);
   readonly documentService = inject(DocumentService);
 
+  private readonly _currentUserRole = signal<string | null>(null);
+
   /** Current role of the authenticated user (e.g. 'ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER', 'VIEWER'). */
-  currentUserRole: string | null = null;
+  get currentUserRole(): string | null {
+    return this._currentUserRole();
+  }
+
+  set currentUserRole(value: string | null) {
+    this._currentUserRole.set(value);
+  }
   private readonly filterService = inject(FilterService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly fb = inject(FormBuilder);
   private readonly primeNG = inject(PrimeNG);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** Polling interval (ms) for checking asynchronous Google Drive backup status. */
+  static readonly DRIVE_SYNC_POLL_INTERVAL_MS = 2000;
+
+  /** Maximum number of polling attempts per document (15 * 2s = 30s). */
+  static readonly DRIVE_SYNC_POLL_MAX_ATTEMPTS = 15;
+
+  /** Active per-document polling timers keyed by stringified document ID. */
+  private readonly activeDriveSyncPollers = new Map<
+    string,
+    ReturnType<typeof setTimeout> | null
+  >();
+
+  /** Set to true once the component is destroyed so async callbacks exit safely. */
+  private isDestroyed = false;
+
+  constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.isDestroyed = true;
+      this.clearAllDriveSyncPollers();
+    });
+  }
 
   /** Reference to the p-table instance for programmatic filter resets. */
   @ViewChild('dt') documentsTable!: Table;
@@ -268,9 +316,16 @@ export class DocumentListComponent implements OnInit {
   endDate: Date | null = null;
   readonly datePickerInputStyle = { height: '42px' };
 
+  /** Menu items for the export dropdown popup menu. */
+  exportMenuItems: MenuItem[] = [];
+
   // Lifecycle
 
   async ngOnInit(): Promise<void> {
+    this.exportMenuItems = [
+      { label: 'Exportar a PDF', icon: 'pi pi-file-pdf', command: () => this.exportPdf() },
+      { label: 'Exportar a Excel', icon: 'pi pi-file-excel', command: () => this.exportExcel() },
+    ];
     this.filterService.register(
       'dateRangeCustom',
       (value: string | Date | null | undefined, filter: DateRangeFilter | null): boolean => {
@@ -303,6 +358,7 @@ export class DocumentListComponent implements OnInit {
     });
     this.currentUserRole = await this.authService.getUserRole();
     await this.documentService.loadDocuments();
+    this.resumePendingDriveSyncPolling();
   }
 
   // Filter helpers
@@ -358,6 +414,126 @@ export class DocumentListComponent implements OnInit {
     return typeof version === 'number' && !Number.isInteger(version)
       ? `v${version.toFixed(1)}`
       : `v${String(version).padStart(2, '0')}`;
+  }
+
+  /**
+   * Formats a process area identifier into its human-readable label.
+   *
+   * @param area - Key or name of the process area.
+   * @returns Formatted label.
+   */
+  getProcessAreaLabel(area: string | null | undefined): string {
+    if (!area) return 'N/A';
+    const found = this.processAreaOptions.find((p) => p.value === area);
+    return found ? found.label : area;
+  }
+
+  /**
+   * Formats the relevant document date according to ISO 9001 requirements.
+   * - If status is 'APPROVED', returns the Approval Date (e.g. approved_at / approvedAt or fallback).
+   * - Otherwise, returns the Last Modification Date (updated_at / updatedAt).
+   * Format: MM/YYYY (e.g. '11/2026').
+   *
+   * @param doc - The document object.
+   * @returns Formatted date string in 'MM/YYYY' format or '-' if date is unavailable.
+   */
+  getFormattedDocumentDate(doc: any): string {
+    if (!doc) return '-';
+    const rawDate =
+      doc.status === 'APPROVED'
+        ? (doc.approved_at ?? doc.approvedAt ?? doc.updated_at ?? doc.updatedAt)
+        : (doc.updated_at ?? doc.updatedAt);
+
+    if (!rawDate) return '-';
+    const date = new Date(rawDate);
+    if (Number.isNaN(date.getTime())) return '-';
+
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${month}/${year}`;
+  }
+
+  /**
+   * Retrieves the current document set displayed in the table (filtered or full list).
+   *
+   * @returns Array of documents to export.
+   */
+  getDocumentsToExport(): Document[] {
+    return this.documentsTable?.filteredValue ?? this.displayedDocuments;
+  }
+
+  /**
+   * Exports the currently displayed document list into a PDF document using jsPDF and jspdf-autotable.
+   */
+  exportPdf(): void {
+    const docs = this.getDocumentsToExport();
+    const doc = new jsPDF();
+
+    // Header title and metadata
+    doc.setFontSize(16);
+    doc.setTextColor(136, 19, 55); // #881337
+    doc.text('Listado Maestro de Documentos - SGC', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Fecha de exportación: ${new Date().toLocaleDateString('es-ES')}`, 14, 25);
+    doc.text(`Total de documentos: ${docs.length}`, 14, 30);
+
+    const head = [['Código', 'Título', 'Área / Proceso', 'Versión', 'Estado', 'Fecha']];
+    const body = docs.map((d) => [
+      d.code || 'S/C',
+      d.title || '',
+      this.getProcessAreaLabel(d.process_area),
+      this.formatVersion(d.version),
+      this.getStatusLabel(d.status),
+      this.getFormattedDocumentDate(d),
+    ]);
+
+    autoTable(doc, {
+      head,
+      body,
+      startY: 35,
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        overflow: 'linebreak',
+      },
+      headStyles: {
+        fillColor: [136, 19, 55],
+        textColor: 255,
+        fontStyle: 'bold',
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+    });
+
+    doc.save('listado_maestro_sgc.pdf');
+  }
+
+  /**
+   * Exports the currently displayed document list into an Excel workbook (.xlsx) using xlsx and file-saver.
+   */
+  exportExcel(): void {
+    const docs = this.getDocumentsToExport();
+    const data = docs.map((d) => ({
+      'Código': d.code || 'S/C',
+      'Título': d.title || '',
+      'Área / Proceso': this.getProcessAreaLabel(d.process_area),
+      'Versión': this.formatVersion(d.version),
+      'Estado': this.getStatusLabel(d.status),
+      'Fecha': this.getFormattedDocumentDate(d),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Listado Maestro');
+
+    const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
+    });
+    saveAs(blob, 'listado_maestro_sgc.xlsx');
   }
 
   // PDF viewer modal methods
@@ -713,12 +889,12 @@ export class DocumentListComponent implements OnInit {
       return;
     }
 
+    const targetDocumentId = this.documentToChange.id;
+    const targetStatus = this.selectedNewStatus;
+
     this.isUpdatingStatus = true;
     try {
-      await this.documentService.updateDocumentStatus(
-        this.documentToChange.id,
-        this.selectedNewStatus,
-      );
+      await this.documentService.updateDocumentStatus(targetDocumentId, targetStatus);
 
       this.messageService.add({
         severity: 'success',
@@ -729,6 +905,36 @@ export class DocumentListComponent implements OnInit {
 
       this.closeStatusModal();
       await this.documentService.loadDocuments();
+
+      if (targetStatus === 'APPROVED') {
+        const refreshedDoc = this.documentService
+          .documents()
+          .find((doc) => String(doc.id) === String(targetDocumentId));
+
+        if (refreshedDoc?.drive_sync_status === 'SYNCED') {
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Respaldo completado',
+            detail: 'El documento se respaldó correctamente en Google Drive.',
+            life: 5000,
+          });
+        } else if (refreshedDoc?.drive_sync_status === 'ERROR') {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error de respaldo',
+            detail: this.getDriveErrorToastDetail(refreshedDoc.drive_sync_error),
+            life: 6000,
+          });
+        } else {
+          this.messageService.add({
+            severity: 'info',
+            summary: 'Respaldo',
+            detail: 'Iniciando respaldo en Google Drive...',
+            life: 4000,
+          });
+          this.startDriveSyncPolling(targetDocumentId);
+        }
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Error al actualizar el estado del documento.';
@@ -814,6 +1020,262 @@ export class DocumentListComponent implements OnInit {
       default:
         return false;
     }
+  }
+
+  // Google Drive backup status & retry helpers
+
+  /**
+   * Determines whether the given role can trigger a manual Google Drive sync retry
+   * on approved documents (matching Supabase RLS `documents_update_policy`).
+   *
+   * @param role - Optional role to evaluate (defaults to current user's role).
+   * @returns `true` for 'ADMIN' and 'APPROVER', `false` otherwise.
+   */
+  canRetryDriveSync(role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    return activeRole === 'ADMIN' || activeRole === 'APPROVER';
+  }
+
+  /**
+   * Formats an ISO timestamp into `dd/MM/yyyy HH:mm` for Google Drive backup tooltips.
+   *
+   * @param isoDate - The ISO timestamp from `drive_synced_at`.
+   * @returns Formatted date/time string or empty string if missing/invalid.
+   */
+  formatDriveSyncedDate(isoDate: string | null | undefined): string {
+    if (!isoDate) {
+      return '';
+    }
+    const parsed = new Date(isoDate);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+    const day = String(parsed.getDate()).padStart(2, '0');
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const year = parsed.getFullYear();
+    const hours = String(parsed.getHours()).padStart(2, '0');
+    const minutes = String(parsed.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  }
+
+  /**
+   * Builds the tooltip shown when a document is synced to Google Drive.
+   *
+   * @param doc - The synced document record.
+   * @returns Localized Spanish tooltip including sync timestamp if available.
+   */
+  getDriveSyncedTooltip(doc: Document): string {
+    const formatted = this.formatDriveSyncedDate(doc.drive_synced_at);
+    return formatted ? `Respaldado el ${formatted}` : 'Respaldado en Google Drive';
+  }
+
+  /**
+   * Builds the tooltip shown when Google Drive synchronization failed.
+   * Falls back to a concise Spanish message if `drive_sync_error` is missing
+   * or still holds a legacy raw English/URL technical error.
+   *
+   * @param doc - The document record in error state.
+   * @returns Localized Spanish error tooltip.
+   */
+  getDriveErrorTooltip(doc: Document): string {
+    const fallbackMessage = 'Error al sincronizar con Google Drive. Hacé clic en reintentar.';
+    const rawError = doc.drive_sync_error?.trim();
+    if (!rawError || this.isLegacyTechnicalDriveError(rawError)) {
+      return fallbackMessage;
+    }
+    return rawError;
+  }
+
+  /**
+   * Detects legacy raw English technical errors or URLs stored before Spanish mapping.
+   */
+  private isLegacyTechnicalDriveError(message: string): boolean {
+    if (message.length > 160 || /https?:\/\/|\berror:/i.test(message)) {
+      return true;
+    }
+    return /\b(failed|quota|exceeded|storage|service account|oauth|token|invalid|missing|unexpected|unable|timeout|network|forbidden|unauthorized|not found|http\s*\d{3}|google drive upload|supabase|status code|exception|stack|permission denied)\b/i.test(
+      message,
+    );
+  }
+
+  /**
+   * Builds the external Google Drive viewer URL for a backed-up document.
+   *
+   * @param fileId - The Google Drive file ID.
+   * @returns Direct Google Drive file URL.
+   */
+  getDriveFileUrl(fileId: string): string {
+    return `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`;
+  }
+
+  /**
+   * Triggers a manual Google Drive backup or retry for the specified document,
+   * displays context-specific PrimeNG Toast feedback, and starts status polling.
+   *
+   * @param doc - The approved document to sync.
+   */
+  async onRetryDriveSync(doc: Document): Promise<void> {
+    if (!this.canRetryDriveSync() || doc.drive_sync_status === 'PENDING') {
+      return;
+    }
+
+    const isRetry = doc.drive_sync_status === 'ERROR';
+
+    try {
+      await this.documentService.retryDriveSync(doc.id);
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Respaldo',
+        detail: isRetry
+          ? 'Reintentando respaldo en Google Drive...'
+          : 'Iniciando respaldo en Google Drive...',
+        life: 4000,
+      });
+      this.startDriveSyncPolling(doc.id);
+    } catch {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: isRetry
+          ? 'No se pudo iniciar el reintento de respaldo.'
+          : 'No se pudo iniciar el respaldo en Google Drive.',
+        life: 6000,
+      });
+    } finally {
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Starts bounded polling for any approved document already in `'PENDING'` sync state
+   * when the repository initially loads.
+   */
+  private resumePendingDriveSyncPolling(): void {
+    for (const doc of this.documentService.documents()) {
+      if (doc.status === 'APPROVED' && doc.drive_sync_status === 'PENDING') {
+        this.startDriveSyncPolling(doc.id);
+      }
+    }
+  }
+
+  /**
+   * Polls `public.documents` every 2 seconds (up to 15 attempts / 30 seconds) for a document
+   * in `'PENDING'` Drive sync state, updating the row and displaying a completion Toast
+   * as soon as the state transitions out of `'PENDING'`.
+   *
+   * Deduplicates active pollers per `documentId` and exits safely on component destroy.
+   *
+   * @param documentId - The ID of the document to monitor.
+   */
+  startDriveSyncPolling(documentId: number | string): void {
+    const key = String(documentId);
+    if (this.isDestroyed || this.activeDriveSyncPollers.has(key)) {
+      return;
+    }
+
+    let attempts = 0;
+
+    const scheduleNext = (): void => {
+      if (this.isDestroyed || !this.activeDriveSyncPollers.has(key)) {
+        return;
+      }
+      const timerId = setTimeout(() => {
+        void runCheck();
+      }, DocumentListComponent.DRIVE_SYNC_POLL_INTERVAL_MS);
+      this.activeDriveSyncPollers.set(key, timerId);
+    };
+
+    const runCheck = async (): Promise<void> => {
+      if (this.isDestroyed || !this.activeDriveSyncPollers.has(key)) {
+        return;
+      }
+
+      this.activeDriveSyncPollers.set(key, null);
+      attempts += 1;
+
+      let snapshot: DriveSyncSnapshot | null = null;
+      try {
+        snapshot = await this.documentService.getDriveSyncStatus(documentId);
+      } catch (err) {
+        console.error('Unexpected error polling Google Drive sync status:', err);
+      }
+
+      if (this.isDestroyed || !this.activeDriveSyncPollers.has(key)) {
+        return;
+      }
+
+      if (snapshot && snapshot.drive_sync_status !== 'PENDING') {
+        this.stopDriveSyncPolling(documentId);
+        this.documentService.updateLocalDriveSyncState(documentId, snapshot);
+
+        if (snapshot.drive_sync_status === 'SYNCED') {
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Respaldo completado',
+            detail: 'El documento se respaldó correctamente en Google Drive.',
+            life: 5000,
+          });
+        } else if (snapshot.drive_sync_status === 'ERROR') {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error de respaldo',
+            detail: this.getDriveErrorToastDetail(snapshot.drive_sync_error),
+            life: 6000,
+          });
+        }
+
+        this.cdr.markForCheck();
+        return;
+      }
+
+      if (attempts >= DocumentListComponent.DRIVE_SYNC_POLL_MAX_ATTEMPTS) {
+        this.stopDriveSyncPolling(documentId);
+        return;
+      }
+
+      scheduleNext();
+    };
+
+    this.activeDriveSyncPollers.set(key, null);
+    scheduleNext();
+  }
+
+  /**
+   * Stops an active Google Drive polling loop for the given document ID, if present.
+   *
+   * @param documentId - The ID of the document whose poller should be cleared.
+   */
+  stopDriveSyncPolling(documentId: number | string): void {
+    const key = String(documentId);
+    const timerId = this.activeDriveSyncPollers.get(key);
+    if (timerId !== null && timerId !== undefined) {
+      clearTimeout(timerId);
+    }
+    this.activeDriveSyncPollers.delete(key);
+  }
+
+  /**
+   * Clears all active Google Drive sync polling timers on component destruction.
+   */
+  private clearAllDriveSyncPollers(): void {
+    for (const timerId of this.activeDriveSyncPollers.values()) {
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+    }
+    this.activeDriveSyncPollers.clear();
+  }
+
+  /**
+   * Builds a clean Spanish error Toast detail from `drive_sync_error`, falling back
+   * if missing or if it contains legacy raw technical text/URLs.
+   */
+  private getDriveErrorToastDetail(driveSyncError: string | null | undefined): string {
+    const trimmed = driveSyncError?.trim();
+    if (!trimmed || this.isLegacyTechnicalDriveError(trimmed)) {
+      return 'No se pudo completar el respaldo en Google Drive.';
+    }
+    return trimmed;
   }
 
   /**

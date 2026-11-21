@@ -5,9 +5,6 @@
   <header class="doc-list-header">
     <div class="doc-list-header__titles">
       <h1 class="doc-list-header__title">Repositorio Documental</h1>
-      <p class="doc-list-header__subtitle">
-        Listado Maestro de Documentos del Sistema de Gestión de Calidad
-      </p>
     </div>
 
     @if (canViewActions()) {
@@ -34,6 +31,27 @@
 
   <!-- Data table -->
   <div class="doc-list-table-card">
+    <div class="flex justify-content-between align-items-center mb-2">
+      <h2 class="text-xl font-semibold m-0">
+        Listado Maestro de Documentos del Sistema de Gestión de Calidad
+      </h2>
+      <div>
+        <p-menu #exportMenu [popup]="true" [model]="exportMenuItems"></p-menu>
+        <button
+          id="btn-export-menu"
+          type="button"
+          pButton
+          pRipple
+          icon="pi pi-download"
+          class="p-button-rounded p-button-text p-button-secondary"
+          (click)="exportMenu.toggle($event)"
+          aria-label="Opciones de exportación"
+        >
+          <i class="pi pi-download" pButtonIcon></i>
+        </button>
+      </div>
+    </div>
+
     <p-table
       #dt
       [value]="displayedDocuments"
@@ -118,9 +136,8 @@
           <th pSortableColumn="title">Título <p-sort-icon field="title" /></th>
           <th pSortableColumn="version">Versión <p-sort-icon field="version" /></th>
           <th>Estado</th>
-          <th pSortableColumn="updated_at">
-            Fecha de Modificación <p-sort-icon field="updated_at" />
-          </th>
+          <th pSortableColumn="updated_at">Fecha <p-sort-icon field="updated_at" /></th>
+          <th class="col-backup">Respaldo</th>
           <th class="col-actions">Acciones</th>
         </tr>
       </ng-template>
@@ -149,8 +166,114 @@
             </span>
           </td>
 
-          <!-- Updated at -->
-          <td>{{ doc.updated_at | date: 'dd/MM/yyyy' }}</td>
+          <!-- Date -->
+          <td>{{ getFormattedDocumentDate(doc) }}</td>
+
+          <!-- Google Drive Backup Status -->
+          <td class="col-backup">
+            @if (doc.status === 'APPROVED') {
+              @if (doc.drive_sync_status === 'SYNCED') {
+                @if (doc.drive_file_id) {
+                  <a
+                    [id]="'link-drive-' + doc.id"
+                    [href]="getDriveFileUrl(doc.drive_file_id)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="drive-pill drive-pill--synced"
+                    [pTooltip]="getDriveSyncedTooltip(doc)"
+                    tooltipPosition="top"
+                    tooltipStyleClass="sgc-tooltip"
+                    aria-label="Abrir respaldo en Google Drive"
+                  >
+                    <i class="pi pi-cloud"></i>
+                    <span>Respaldado</span>
+                  </a>
+                } @else {
+                  <span
+                    [id]="'status-drive-synced-' + doc.id"
+                    class="drive-pill drive-pill--synced"
+                    [pTooltip]="getDriveSyncedTooltip(doc)"
+                    tooltipPosition="top"
+                    tooltipStyleClass="sgc-tooltip"
+                    aria-label="Respaldado en Google Drive"
+                  >
+                    <i class="pi pi-cloud"></i>
+                    <span>Respaldado</span>
+                  </span>
+                }
+              } @else if (doc.drive_sync_status === 'PENDING') {
+                <span
+                  [id]="'status-drive-pending-' + doc.id"
+                  class="drive-pill drive-pill--pending"
+                  pTooltip="Sincronizando con Google Drive..."
+                  tooltipPosition="top"
+                  tooltipStyleClass="sgc-tooltip"
+                  aria-label="Sincronizando con Google Drive"
+                >
+                  <i class="pi pi-spin pi-spinner"></i>
+                  <span>Sincronizando</span>
+                </span>
+              } @else if (doc.drive_sync_status === 'ERROR') {
+                <div class="drive-sync-cell">
+                  <span
+                    [id]="'status-drive-error-' + doc.id"
+                    class="drive-pill drive-pill--error"
+                    [pTooltip]="getDriveErrorTooltip(doc)"
+                    tooltipPosition="top"
+                    tooltipStyleClass="sgc-tooltip"
+                    aria-label="Error de respaldo en Google Drive"
+                  >
+                    <i class="pi pi-exclamation-circle"></i>
+                    <span>Error</span>
+                  </span>
+                  @if (canRetryDriveSync()) {
+                    <button
+                      [id]="'btn-retry-drive-' + doc.id"
+                      type="button"
+                      class="drive-icon-btn drive-retry-btn"
+                      pTooltip="Reintentar respaldo"
+                      tooltipPosition="top"
+                      tooltipStyleClass="sgc-tooltip"
+                      aria-label="Reintentar respaldo"
+                      (click)="onRetryDriveSync(doc)"
+                    >
+                      <i class="pi pi-refresh"></i>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <div class="drive-sync-cell">
+                  @if (canRetryDriveSync()) {
+                    <button
+                      [id]="'btn-send-drive-' + doc.id"
+                      type="button"
+                      class="drive-icon-btn drive-send-btn"
+                      pTooltip="Respaldar en Google Drive"
+                      tooltipPosition="top"
+                      tooltipStyleClass="sgc-tooltip"
+                      aria-label="Respaldar en Google Drive"
+                      (click)="onRetryDriveSync(doc)"
+                    >
+                      <i class="pi pi-cloud-upload"></i>
+                    </button>
+                  } @else {
+                    <span
+                      [id]="'status-drive-none-' + doc.id"
+                      class="drive-sync-indicator"
+                      pTooltip="Sin respaldo en Google Drive"
+                      tooltipPosition="top"
+                      tooltipStyleClass="sgc-tooltip"
+                      aria-label="Sin respaldo en Google Drive"
+                    >
+                      <i class="pi pi-cloud-upload drive-sync-icon--unbacked"></i>
+                    </span>
+                  }
+                </div>
+              }
+            } @else {
+              <span class="drive-sync-dash" aria-label="No aplica">—</span>
+            }
+          </td>
 
           <!-- Action buttons -->
           <td class="col-actions">
@@ -235,7 +358,7 @@
       <!-- ── Empty message ── -->
       <ng-template #emptymessage>
         <tr>
-          <td colspan="6" class="doc-list-empty">
+          <td colspan="7" class="doc-list-empty">
             <i class="pi pi-folder-open doc-list-empty__icon"></i>
             <p>No se encontraron documentos con los filtros seleccionados.</p>
           </td>

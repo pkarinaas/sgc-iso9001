@@ -2,8 +2,8 @@
 
 -- 1. Add audit columns to the users table
 ALTER TABLE public.users
-    ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN updater_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS updater_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
 
 -- 2. Create a shared function to record the timestamp and authenticated user
 -- SECURITY DEFINER allows the function to execute with its owner's privileges.

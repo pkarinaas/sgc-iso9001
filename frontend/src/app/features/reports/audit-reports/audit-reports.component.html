@@ -1,0 +1,211 @@
+<p-toast />
+
+<section class="audit-reports-page">
+  <!-- Page Header -->
+  <header class="audit-reports-header mb-6">
+    <div class="audit-reports-header__titles">
+      <h1 class="audit-reports-header__title">Reportes de Auditoría</h1>
+      <p class="audit-reports-header__subtitle">Evidencia de lectura y trazabilidad documental</p>
+    </div>
+  </header>
+
+  <!-- Audit Records Data Table Card -->
+  <div class="audit-table-card">
+    <div class="flex justify-content-between align-items-center mb-4">
+      <h2 class="text-lg font-semibold text-gray-800 m-0">Registro de Confirmaciones de Lectura</h2>
+
+      <div>
+        <button
+          id="btn-export-menu"
+          type="button"
+          pButton
+          icon="pi pi-download"
+          class="p-button-text p-button-secondary"
+          (click)="exportMenu.toggle($event)"
+          aria-label="Opciones de exportación"
+        >
+          <i class="pi pi-download" pButtonIcon></i>
+        </button>
+        <p-menu #exportMenu [popup]="true" [model]="exportMenuItems"></p-menu>
+      </div>
+    </div>
+
+    <div class="audit-filters-bar flex flex-wrap align-items-center gap-3 mb-4">
+      <!-- 1. Date From (Desde) -->
+      <div class="flex-1" style="min-width: 140px; max-width: 200px">
+        <p-datepicker
+          id="filter-date-from"
+          [(ngModel)]="dateFrom"
+          dateFormat="dd/mm/yy"
+          [showClear]="true"
+          placeholder="Desde"
+          styleClass="w-full"
+          class="p-inputtext-sm w-full"
+          appendTo="body"
+        ></p-datepicker>
+      </div>
+
+      <!-- 2. Date To (Hasta) -->
+      <div class="flex-1" style="min-width: 140px; max-width: 200px">
+        <p-datepicker
+          id="filter-date-to"
+          [(ngModel)]="dateTo"
+          dateFormat="dd/mm/yy"
+          [showClear]="true"
+          placeholder="Hasta"
+          [minDate]="dateFrom"
+          styleClass="w-full"
+          class="p-inputtext-sm w-full"
+          appendTo="body"
+        ></p-datepicker>
+      </div>
+
+      <!-- 3. Area Dropdown -->
+      <div class="flex-1" style="min-width: 160px; max-width: 260px">
+        <p-select
+          id="filter-area"
+          [(ngModel)]="selectedArea"
+          [options]="areaOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos los Procesos"
+          [showClear]="true"
+          styleClass="w-full"
+          class="w-full p-inputtext-sm"
+          appendTo="body"
+        ></p-select>
+      </div>
+
+      <!-- 4. User Dropdown -->
+      <div class="flex-1" style="min-width: 160px; max-width: 260px">
+        <p-select
+          id="filter-user"
+          [(ngModel)]="selectedUser"
+          [options]="userOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos los usuarios"
+          [showClear]="true"
+          styleClass="w-full"
+          class="w-full p-inputtext-sm"
+          appendTo="body"
+        ></p-select>
+      </div>
+
+      <!-- 5. Filter Action Buttons -->
+      <div class="flex gap-2 ml-auto">
+        <button
+          id="btn-apply-filters"
+          pButton
+          type="button"
+          (click)="applyFilters()"
+          class="btn-apply-filters p-button-sm"
+        >
+          <i class="pi pi-search" pButtonIcon></i>
+          <span pButtonLabel>Aplicar Filtros</span>
+        </button>
+
+        <button
+          id="btn-reset-filters"
+          pButton
+          type="button"
+          (click)="resetFilters()"
+          class="p-button-secondary p-button-outlined p-button-sm"
+          title="Restablecer filtros"
+        >
+          <i class="pi pi-refresh" pButtonIcon></i>
+          <span pButtonLabel>Limpiar</span>
+        </button>
+      </div>
+    </div>
+
+    <p-table
+      #dt
+      [value]="filteredRecords"
+      [loading]="loading()"
+      [paginator]="true"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 25, 50]"
+      styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} registros de confirmación"
+    >
+      <!-- Table Header -->
+      <ng-template #header>
+        <tr>
+          <th pSortableColumn="doc_code" class="text-[#881337]">
+            Documento <p-sort-icon field="doc_code" />
+          </th>
+          <th pSortableColumn="process_area" class="text-[#881337]">
+            Proceso <p-sort-icon field="process_area" />
+          </th>
+          <th pSortableColumn="user_name" class="text-[#881337]">
+            Usuario <p-sort-icon field="user_name" />
+          </th>
+          <th pSortableColumn="user_role" class="text-[#881337]">
+            Rol <p-sort-icon field="user_role" />
+          </th>
+          <th pSortableColumn="read_at" class="text-[#881337]">
+            Fecha de Lectura <p-sort-icon field="read_at" />
+          </th>
+        </tr>
+      </ng-template>
+
+      <!-- Table Body -->
+      <ng-template #body let-record>
+        <tr>
+          <!-- Documento (Code & Title) -->
+          <td class="doc-cell">
+            <div class="flex flex-col gap-0.5">
+              <span class="doc-code">{{ record.doc_code }}</span>
+              <span class="text-xs text-gray-600 font-medium">
+                {{ record.doc_title }}
+                @if (record.doc_version != null) {
+                  <span class="text-gray-400 font-mono">(v{{ record.doc_version }})</span>
+                }
+              </span>
+            </div>
+          </td>
+
+          <!-- Área -->
+          <td>
+            <span class="area-badge">
+              {{ getProcessAreaLabel(record.process_area) }}
+            </span>
+          </td>
+
+          <!-- Usuario -->
+          <td>
+            <span class="font-medium text-gray-800">{{ record.user_name }}</span>
+          </td>
+
+          <!-- Rol -->
+          <td>
+            <span class="sgc-badge" [attr.data-role]="record.user_role">
+              {{ mapRoleToSpanish(record.user_role) }}
+            </span>
+          </td>
+
+          <!-- Fecha de Lectura -->
+          <td>
+            <span class="text-sm font-medium text-gray-700">
+              {{ record.read_at | date: 'dd/MM/yyyy HH:mm' }}
+            </span>
+          </td>
+        </tr>
+      </ng-template>
+
+      <!-- Empty State -->
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="5" class="text-center p-8 text-gray-500">
+            <i class="pi pi-inbox text-3xl mb-2 text-rose-300 block"></i>
+            <p class="m-0 font-medium">
+              No se encontraron registros de confirmación de lectura para los filtros aplicados.
+            </p>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+</section>

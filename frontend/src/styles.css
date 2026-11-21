@@ -56,7 +56,8 @@ body {
   display: flex;
 }
 
-.flex-col {
+.flex-col,
+.flex-column {
   flex-direction: column;
 }
 
@@ -77,8 +78,56 @@ body {
   align-items: center;
 }
 
-.justify-between {
+.items-end,
+.align-items-end {
+  align-items: flex-end;
+}
+
+.justify-between,
+.justify-content-between {
   justify-content: space-between;
+}
+
+.justify-end,
+.justify-content-end {
+  justify-content: flex-end;
+}
+
+.mb-3 {
+  margin-bottom: 0.75rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-6 {
+  margin-bottom: 2rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.mt-5 {
+  margin-top: 1.5rem;
+}
+
+.mt-6 {
+  margin-top: 2rem;
+}
+
+.m-0 {
+  margin: 0;
+}
+
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+.font-semibold {
+  font-weight: 600;
 }
 
 .h-screen {
@@ -162,6 +211,10 @@ body {
   margin-left: auto;
 }
 
+.gap-1 {
+  gap: 0.25rem;
+}
+
 .gap-2 {
   gap: 0.5rem;
 }
@@ -172,6 +225,16 @@ body {
 
 .gap-4 {
   gap: 1rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 
 .rounded-lg {
@@ -213,6 +276,10 @@ body {
 .text-gray-600,
 .text-color-secondary {
   color: var(--p-text-muted-color, #64748b);
+}
+
+.text-gray-800 {
+  color: #1f2937;
 }
 
 .text-\[\#800020\] {
@@ -366,4 +433,36 @@ button[pButton] {
 p-dialog .p-button.border-none {
   border: none !important;
   outline: none !important;
+}
+
+/* Minimalist PrimeNG tooltip (tooltipStyleClass="sgc-tooltip") */
+.p-tooltip.sgc-tooltip {
+  max-width: 240px !important;
+}
+
+.p-tooltip.sgc-tooltip .p-tooltip-text {
+  font-size: 0.78rem !important;
+  line-height: 1.4 !important;
+  padding: 0.45rem 0.65rem !important;
+  border-radius: 8px !important;
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+  word-break: break-word;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-top .p-tooltip-arrow {
+  border-top-color: #1e293b !important;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-bottom .p-tooltip-arrow {
+  border-bottom-color: #1e293b !important;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-left .p-tooltip-arrow {
+  border-left-color: #1e293b !important;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-right .p-tooltip-arrow {
+  border-right-color: #1e293b !important;
 }

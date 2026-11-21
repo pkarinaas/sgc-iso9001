@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { BehaviorSubject } from 'rxjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { signal } from '@angular/core';
 import { AppLayoutComponent } from './app-layout.component';
 import { AuthService } from '../../services/auth.service';
 import { InactivityService } from '../../services/inactivity.service';
@@ -10,7 +11,13 @@ import { InactivityService } from '../../services/inactivity.service';
 describe('AppLayoutComponent', () => {
   let fixture: ComponentFixture<AppLayoutComponent>;
   let component: AppLayoutComponent;
-  let authServiceMock: { signOut: ReturnType<typeof vi.fn> };
+  let authServiceMock: {
+    signOut: ReturnType<typeof vi.fn>;
+    getCurrentUserProfile: ReturnType<typeof vi.fn>;
+    getUserRole: ReturnType<typeof vi.fn>;
+    userRole: ReturnType<typeof signal<string | null>>;
+    currentUser: ReturnType<typeof signal<any>>;
+  };
   let warningSubject: BehaviorSubject<boolean>;
   let inactivityServiceMock: {
     isWarningVisible$: BehaviorSubject<boolean>;
@@ -24,6 +31,22 @@ describe('AppLayoutComponent', () => {
 
     authServiceMock = {
       signOut: vi.fn().mockResolvedValue(undefined),
+      getUserRole: vi.fn().mockResolvedValue('ADMIN'),
+      getCurrentUserProfile: vi.fn().mockResolvedValue({
+        id: 'usr-123',
+        full_name: 'Juan Pérez',
+        email: 'juan@empresa.com',
+        role_id: 1,
+        roles: { id: 1, name: 'ADMIN', description: 'Administrador', created_at: '' },
+      }),
+      userRole: signal('ADMIN'),
+      currentUser: signal({
+        id: 'usr-123',
+        full_name: 'Juan Pérez',
+        email: 'juan@empresa.com',
+        role_id: 1,
+        roles: { id: 1, name: 'ADMIN', description: 'Administrador', created_at: '' },
+      }),
     };
 
     inactivityServiceMock = {
@@ -110,10 +133,10 @@ describe('AppLayoutComponent', () => {
     expect(component.isWarningVisible()).toBe(true);
   });
 
-  it('should render navigation links for dashboard, users and documents', () => {
+  it('should render navigation links for dashboard, users, documents and reports', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const links = compiled.querySelectorAll('aside nav a');
-    expect(links.length).toBe(3);
+    expect(links.length).toBe(4);
 
     const dashboardLink = Array.from(links).find(
       (link) => link.getAttribute('routerLink') === '/dashboard',
@@ -121,6 +144,9 @@ describe('AppLayoutComponent', () => {
     const userLink = Array.from(links).find((link) => link.getAttribute('routerLink') === '/users');
     const docLink = Array.from(links).find(
       (link) => link.getAttribute('routerLink') === '/documents',
+    );
+    const reportsLink = Array.from(links).find(
+      (link) => link.getAttribute('routerLink') === '/reportes',
     );
 
     expect(dashboardLink).toBeTruthy();
@@ -134,6 +160,10 @@ describe('AppLayoutComponent', () => {
     expect(docLink).toBeTruthy();
     expect(docLink?.textContent).toContain('Repositorio');
     expect(docLink?.querySelector('.pi.pi-folder')).toBeTruthy();
+
+    expect(reportsLink).toBeTruthy();
+    expect(reportsLink?.textContent).toContain('Reportes');
+    expect(reportsLink?.querySelector('.pi.pi-file-check')).toBeTruthy();
   });
 
   it('should call authService.signOut() and stop monitoring when clicking logout button', async () => {
@@ -152,6 +182,12 @@ describe('AppLayoutComponent', () => {
     const mainEl = compiled.querySelector('main');
     expect(mainEl).toBeTruthy();
     expect(mainEl?.querySelector('router-outlet')).toBeTruthy();
+  });
+
+  it('should render TopbarComponent inside the layout container', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const topbarEl = compiled.querySelector('app-topbar');
+    expect(topbarEl).toBeTruthy();
   });
 
   it('should toggle sidebar visibility when toggle button is clicked', () => {
@@ -175,5 +211,40 @@ describe('AppLayoutComponent', () => {
 
     expect(component.isSidebarVisible()).toBe(true);
     expect(aside.classList.contains('sidebar--hidden')).toBe(false);
+  });
+
+  describe('Role-based navigation visibility (Admin only for Usuarios)', () => {
+    it('should display the "Usuarios" menu link when the user has the ADMIN role', () => {
+      expect(component.isAdmin).toBe(true);
+      const compiled = fixture.nativeElement as HTMLElement;
+      const userLink = compiled.querySelector('aside nav a[routerLink="/users"]');
+      expect(userLink).toBeTruthy();
+      expect(userLink?.textContent).toContain('Usuarios');
+    });
+
+    it('should hide the "Usuarios" menu link when the user is not an Admin (e.g. VIEWER)', async () => {
+      authServiceMock.userRole.set('VIEWER');
+      authServiceMock.currentUser.set({
+        id: 'usr-999',
+        full_name: 'Lector Estándar',
+        email: 'lector@empresa.com',
+        role_id: 5,
+        roles: { id: 5, name: 'VIEWER', description: 'Lector', created_at: '' },
+      });
+      component.userRole.set('VIEWER');
+      fixture.detectChanges();
+
+      expect(component.isAdmin).toBe(false);
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const userLink = compiled.querySelector('aside nav a[routerLink="/users"]');
+      expect(userLink).toBeNull();
+
+      const links = compiled.querySelectorAll('aside nav a');
+      expect(links.length).toBe(3);
+      expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/dashboard')).toBe(true);
+      expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/documents')).toBe(true);
+      expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/reportes')).toBe(true);
+    });
   });
 });

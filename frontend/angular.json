@@ -3,7 +3,8 @@
   "version": 1,
   "cli": {
     "packageManager": "npm",
-    "analytics": false
+    "analytics": false,
+    "schematicCollections": ["angular-eslint"]
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -30,11 +31,17 @@
                 "output": "/assets/"
               }
             ],
-            "styles": [
-              "src/styles.css"
-            ],
+            "styles": ["src/styles.css"],
             "allowedCommonJsDependencies": [
-              "pako"
+              "pako",
+              "file-saver",
+              "xlsx",
+              "jspdf",
+              "html2canvas",
+              "canvg",
+              "raf",
+              "rgbcolor",
+              "core-js"
             ]
           },
           "configurations": {
@@ -42,8 +49,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "3.5MB",
-                  "maximumError": "4.5MB"
+                  "maximumWarning": "4.5MB",
+                  "maximumError": "5.5MB"
                 },
                 {
                   "type": "anyComponentStyle",
@@ -79,6 +86,12 @@
           "options": {
             "runner": "vitest",
             "tsConfig": "tsconfig.spec.json"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
           }
         }
       }
