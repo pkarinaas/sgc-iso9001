@@ -30,7 +30,7 @@ import * as XLSX from 'xlsx';
 import { DocumentListComponent } from './document-list';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
-import type { Document } from '../../../core/models/document.model';
+import type { Document, DriveSyncSnapshot } from '../../../core/models/document.model';
 
 describe('DocumentListComponent', () => {
   let component: DocumentListComponent;
@@ -64,6 +64,9 @@ describe('DocumentListComponent', () => {
     updateDocument: vi.fn().mockResolvedValue(undefined),
     deleteDocument: vi.fn().mockResolvedValue(undefined),
     updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
+    retryDriveSync: vi.fn().mockResolvedValue(undefined),
+    getDriveSyncStatus: vi.fn().mockResolvedValue(null),
+    updateLocalDriveSyncState: vi.fn(),
     getNextVersionForCode: vi.fn().mockResolvedValue(1),
     getSignedDocumentUrl: vi
       .fn()
@@ -76,6 +79,27 @@ describe('DocumentListComponent', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockDocumentService.documents.set([...mockDocuments]);
+    mockDocumentService.retryDriveSync.mockResolvedValue(undefined);
+    mockDocumentService.getDriveSyncStatus.mockResolvedValue(null);
+    mockDocumentService.updateLocalDriveSyncState.mockImplementation(
+      (documentId: number | string, snapshot: DriveSyncSnapshot) => {
+        const targetId = String(documentId);
+        mockDocumentService.documents.update((docs) =>
+          docs.map((doc) =>
+            String(doc.id) === targetId
+              ? {
+                  ...doc,
+                  drive_sync_status: snapshot.drive_sync_status,
+                  drive_file_id: snapshot.drive_file_id,
+                  drive_sync_error:
+                    snapshot.drive_sync_status === 'SYNCED' ? null : snapshot.drive_sync_error,
+                  drive_synced_at: snapshot.drive_synced_at,
+                }
+              : doc,
+          ),
+        );
+      },
+    );
     mockAuthService.getUserRole.mockResolvedValue('ADMIN');
     mockDocumentService.getSignedDocumentUrl.mockResolvedValue(
       'https://storage.supabase.com/signed/manual.pdf',
@@ -1136,6 +1160,493 @@ describe('DocumentListComponent', () => {
           expect.any(Blob),
           'listado_maestro_sgc.xlsx',
         );
+      });
+    });
+
+    describe('Google Drive Backup Status & Manual Retry', () => {
+      it('should render "Respaldo" column header immediately before "Acciones" and use colspan 7 on empty table', () => {
+        mockDocumentService.documents.set([]);
+        fixture.detectChanges();
+
+        const headers = Array.from(
+          fixture.nativeElement.querySelectorAll('th'),
+        ) as HTMLElement[];
+        const headerTexts = headers.map((th) => th.textContent?.trim() ?? '');
+        const backupIndex = headerTexts.indexOf('Respaldo');
+        const actionsIndex = headerTexts.indexOf('Acciones');
+
+        expect(backupIndex).toBeGreaterThan(-1);
+        expect(actionsIndex).toBe(backupIndex + 1);
+
+        const emptyCell = fixture.nativeElement.querySelector('.doc-list-empty') as HTMLElement | null;
+        expect(emptyCell?.getAttribute('colspan')).toBe('7');
+      });
+
+      it('should display a muted dash for DRAFT and REVIEWED documents', () => {
+        mockDocumentService.documents.set([
+          { ...mockDocuments[0], id: 'doc-draft', status: 'DRAFT' },
+          { ...mockDocuments[0], id: 'doc-rev', status: 'REVIEWED' },
+        ]);
+        fixture.detectChanges();
+
+        const dashes = fixture.nativeElement.querySelectorAll('.col-backup .drive-sync-dash');
+        expect(dashes.length).toBe(2);
+        expect(dashes[0].textContent?.trim()).toBe('—');
+        expect(dashes[1].textContent?.trim()).toBe('—');
+      });
+
+      it('should render green Drive pill link when APPROVED document is SYNCED with drive_file_id', () => {
+        mockDocumentService.documents.set([
+          {
+            ...mockDocuments[0],
+            id: 'doc-synced',
+            status: 'APPROVED',
+            drive_sync_status: 'SYNCED',
+            drive_file_id: 'drive-file-abc',
+            drive_synced_at: '2026-11-20T15:30:00',
+          },
+        ]);
+        fixture.detectChanges();
+
+        const link = fixture.nativeElement.querySelector(
+          '#link-drive-doc-synced',
+        ) as HTMLAnchorElement | null;
+        expect(link).toBeTruthy();
+        expect(link?.classList.contains('drive-pill--synced')).toBe(true);
+        expect(link?.getAttribute('href')).toBe(
+          'https://drive.google.com/file/d/drive-file-abc/view',
+        );
+        expect(link?.getAttribute('target')).toBe('_blank');
+        expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+        expect(link?.querySelector('.pi-cloud')).toBeTruthy();
+        expect(link?.textContent?.trim()).toContain('Respaldado');
+        expect(component.getDriveSyncedTooltip(mockDocumentService.documents()[0])).toBe(
+          'Respaldado el 20/11/2026 15:30',
+        );
+      });
+
+      it('should render non-link synced pill when drive_file_id is null', () => {
+        mockDocumentService.documents.set([
+          {
+            ...mockDocuments[0],
+            id: 'doc-synced-noid',
+            status: 'APPROVED',
+            drive_sync_status: 'SYNCED',
+            drive_file_id: null,
+            drive_synced_at: null,
+          },
+        ]);
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.querySelector('#link-drive-doc-synced-noid')).toBeNull();
+        const indicator = fixture.nativeElement.querySelector('#status-drive-synced-doc-synced-noid');
+        expect(indicator).toBeTruthy();
+        expect(indicator?.classList.contains('drive-pill--synced')).toBe(true);
+        expect(indicator?.querySelector('.pi-cloud')).toBeTruthy();
+        expect(indicator?.textContent?.trim()).toContain('Respaldado');
+        expect(component.getDriveSyncedTooltip(mockDocumentService.documents()[0])).toBe(
+          'Respaldado en Google Drive',
+        );
+      });
+
+      it('should render amber pill when APPROVED document is PENDING', () => {
+        mockDocumentService.documents.set([
+          {
+            ...mockDocuments[0],
+            id: 'doc-pending',
+            status: 'APPROVED',
+            drive_sync_status: 'PENDING',
+          },
+        ]);
+        fixture.detectChanges();
+
+        const indicator = fixture.nativeElement.querySelector('#status-drive-pending-doc-pending');
+        expect(indicator).toBeTruthy();
+        expect(indicator?.classList.contains('drive-pill--pending')).toBe(true);
+        expect(indicator?.querySelector('.pi-spin.pi-spinner')).toBeTruthy();
+        expect(indicator?.textContent?.trim()).toContain('Sincronizando');
+      });
+
+      it('should render error pill and retry button for ADMIN/APPROVER when ERROR, hiding button for VIEWER', async () => {
+        await fixture.whenStable();
+        const errorDoc: Document = {
+          ...mockDocuments[0],
+          id: 'doc-err',
+          status: 'APPROVED',
+          drive_sync_status: 'ERROR',
+          drive_sync_error: 'No se encontró la carpeta destino configurada en Google Drive.',
+        };
+        mockDocumentService.documents.set([errorDoc]);
+        component.currentUserRole = 'APPROVER';
+        fixture.detectChanges();
+
+        const errIndicator = fixture.nativeElement.querySelector('#status-drive-error-doc-err');
+        const retryBtn = fixture.nativeElement.querySelector('#btn-retry-drive-doc-err');
+        expect(errIndicator?.classList.contains('drive-pill--error')).toBe(true);
+        expect(errIndicator?.querySelector('.pi-exclamation-circle')).toBeTruthy();
+        expect(errIndicator?.textContent?.trim()).toContain('Error');
+        expect(retryBtn).toBeTruthy();
+        expect(retryBtn?.classList.contains('drive-retry-btn')).toBe(true);
+        expect(retryBtn?.querySelector('.pi-refresh')).toBeTruthy();
+
+        expect(component.getDriveErrorTooltip(errorDoc)).toBe(
+          'No se encontró la carpeta destino configurada en Google Drive.',
+        );
+        expect(
+          component.getDriveErrorTooltip({
+            ...errorDoc,
+            drive_sync_error:
+              'Google Drive upload failed: Service Accounts do not have storage quota (https://developers.google.com/drive)',
+          }),
+        ).toBe('Error al sincronizar con Google Drive. Hacé clic en reintentar.');
+        expect(
+          component.getDriveErrorTooltip({ ...errorDoc, drive_sync_error: 'Drive quota exceeded' }),
+        ).toBe('Error al sincronizar con Google Drive. Hacé clic en reintentar.');
+        expect(
+          component.getDriveErrorTooltip({ ...errorDoc, drive_sync_error: null }),
+        ).toBe('Error al sincronizar con Google Drive. Hacé clic en reintentar.');
+
+        component.currentUserRole = 'VIEWER';
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#btn-retry-drive-doc-err')).toBeNull();
+      });
+
+      it('should render manual send button when APPROVED document has null drive_sync_status for ADMIN/APPROVER', async () => {
+        await fixture.whenStable();
+        mockDocumentService.documents.set([
+          {
+            ...mockDocuments[0],
+            id: 'doc-null',
+            status: 'APPROVED',
+            drive_sync_status: null,
+          },
+        ]);
+        component.currentUserRole = 'ADMIN';
+        fixture.detectChanges();
+
+        const sendBtn = fixture.nativeElement.querySelector('#btn-send-drive-doc-null');
+        expect(sendBtn).toBeTruthy();
+        expect(sendBtn?.classList.contains('drive-send-btn')).toBe(true);
+        expect(sendBtn?.querySelector('.pi-cloud-upload')).toBeTruthy();
+
+        component.currentUserRole = 'VIEWER';
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#btn-send-drive-doc-null')).toBeNull();
+        expect(fixture.nativeElement.querySelector('#status-drive-none-doc-null')).toBeTruthy();
+      });
+
+      it('should invoke retryDriveSync and show info toast when clicking retry button', async () => {
+        const errorDoc: Document = {
+          ...mockDocuments[0],
+          id: 'doc-retry',
+          status: 'APPROVED',
+          drive_sync_status: 'ERROR',
+          drive_sync_error: 'Auth error',
+        };
+        mockDocumentService.documents.set([errorDoc]);
+        component.currentUserRole = 'ADMIN';
+        fixture.detectChanges();
+
+        const retryBtn = fixture.nativeElement.querySelector(
+          '#btn-retry-drive-doc-retry',
+        ) as HTMLButtonElement;
+        retryBtn.click();
+        await fixture.whenStable();
+
+        expect(mockDocumentService.retryDriveSync).toHaveBeenCalledWith('doc-retry');
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'info',
+            detail: 'Reintentando respaldo en Google Drive...',
+          }),
+        );
+
+        fixture.destroy();
+      });
+
+      it('should show initial sync toast "Iniciando respaldo en Google Drive..." when triggering backup from null status', async () => {
+        const unbackedDoc: Document = {
+          ...mockDocuments[0],
+          id: 'doc-first',
+          status: 'APPROVED',
+          drive_sync_status: null,
+        };
+        mockDocumentService.documents.set([unbackedDoc]);
+        component.currentUserRole = 'ADMIN';
+        fixture.detectChanges();
+
+        await component.onRetryDriveSync(unbackedDoc);
+
+        expect(mockDocumentService.retryDriveSync).toHaveBeenCalledWith('doc-first');
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'info',
+            summary: 'Respaldo',
+            detail: 'Iniciando respaldo en Google Drive...',
+          }),
+        );
+
+        fixture.destroy();
+      });
+
+      it('should show error toast and skip polling when initial sync or retry fails', async () => {
+        const startPollingSpy = vi.spyOn(component, 'startDriveSyncPolling');
+        const unbackedDoc: Document = {
+          ...mockDocuments[0],
+          id: 'doc-first-fail',
+          status: 'APPROVED',
+          drive_sync_status: null,
+        };
+        const errorDoc: Document = {
+          ...mockDocuments[0],
+          id: 'doc-retry-fail',
+          status: 'APPROVED',
+          drive_sync_status: 'ERROR',
+          drive_sync_error: 'Auth error',
+        };
+        mockDocumentService.retryDriveSync.mockRejectedValueOnce(new Error('DB failure'));
+        await component.onRetryDriveSync(unbackedDoc);
+
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'error',
+            detail: 'No se pudo iniciar el respaldo en Google Drive.',
+          }),
+        );
+
+        mockDocumentService.retryDriveSync.mockRejectedValueOnce(new Error('DB failure'));
+        await component.onRetryDriveSync(errorDoc);
+
+        expect(mockMessageService.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: 'error',
+            detail: 'No se pudo iniciar el reintento de respaldo.',
+          }),
+        );
+        expect(startPollingSpy).not.toHaveBeenCalled();
+      });
+
+      it('should poll PENDING document every 2s, update row to SYNCED, stop polling, and show success toast', async () => {
+        vi.useFakeTimers();
+        try {
+          const initialDoc: Document = {
+            ...mockDocuments[0],
+            id: 'doc-poll-sync',
+            status: 'APPROVED',
+            drive_sync_status: null,
+          };
+          mockDocumentService.documents.set([initialDoc]);
+          mockDocumentService.getDriveSyncStatus
+            .mockResolvedValueOnce({
+              drive_sync_status: 'PENDING',
+              drive_file_id: null,
+              drive_sync_error: null,
+              drive_synced_at: null,
+            })
+            .mockResolvedValueOnce({
+              drive_sync_status: 'SYNCED',
+              drive_file_id: 'drive-id-42',
+              drive_sync_error: null,
+              drive_synced_at: '2026-11-20T22:25:00Z',
+            });
+
+          await component.onRetryDriveSync(initialDoc);
+          expect(mockDocumentService.getDriveSyncStatus).not.toHaveBeenCalled();
+
+          await vi.advanceTimersByTimeAsync(2000);
+          expect(mockDocumentService.getDriveSyncStatus).toHaveBeenCalledTimes(1);
+
+          await vi.advanceTimersByTimeAsync(2000);
+          expect(mockDocumentService.getDriveSyncStatus).toHaveBeenCalledTimes(2);
+          expect(mockDocumentService.updateLocalDriveSyncState).toHaveBeenCalledWith(
+            'doc-poll-sync',
+            {
+              drive_sync_status: 'SYNCED',
+              drive_file_id: 'drive-id-42',
+              drive_sync_error: null,
+              drive_synced_at: '2026-11-20T22:25:00Z',
+            },
+          );
+          expect(mockDocumentService.documents()[0].drive_sync_status).toBe('SYNCED');
+          expect(mockDocumentService.documents()[0].drive_file_id).toBe('drive-id-42');
+          expect(mockMessageService.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              severity: 'success',
+              summary: 'Respaldo completado',
+              detail: 'El documento se respaldó correctamente en Google Drive.',
+            }),
+          );
+
+          await vi.advanceTimersByTimeAsync(6000);
+          expect(mockDocumentService.getDriveSyncStatus).toHaveBeenCalledTimes(2);
+        } finally {
+          fixture.destroy();
+          vi.useRealTimers();
+        }
+      });
+
+      it('should update row to ERROR and show error toast with backend detail or Spanish fallback', async () => {
+        vi.useFakeTimers();
+        try {
+          const docWithMsg: Document = {
+            ...mockDocuments[0],
+            id: 'doc-err-msg',
+            status: 'APPROVED',
+            drive_sync_status: 'PENDING',
+          };
+          const docWithoutMsg: Document = {
+            ...mockDocuments[0],
+            id: 'doc-err-null',
+            status: 'APPROVED',
+            drive_sync_status: 'PENDING',
+          };
+          mockDocumentService.documents.set([docWithMsg, docWithoutMsg]);
+          mockDocumentService.getDriveSyncStatus
+            .mockResolvedValueOnce({
+              drive_sync_status: 'ERROR',
+              drive_file_id: null,
+              drive_sync_error: 'Permisos insuficientes o cuota excedida en Google Drive.',
+              drive_synced_at: null,
+            })
+            .mockResolvedValueOnce({
+              drive_sync_status: 'ERROR',
+              drive_file_id: null,
+              drive_sync_error: null,
+              drive_synced_at: null,
+            });
+
+          component.startDriveSyncPolling('doc-err-msg');
+          component.startDriveSyncPolling('doc-err-null');
+
+          await vi.advanceTimersByTimeAsync(2000);
+
+          expect(mockDocumentService.documents()[0].drive_sync_status).toBe('ERROR');
+          expect(mockDocumentService.documents()[1].drive_sync_status).toBe('ERROR');
+          expect(mockMessageService.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              severity: 'error',
+              summary: 'Error de respaldo',
+              detail: 'Permisos insuficientes o cuota excedida en Google Drive.',
+            }),
+          );
+          expect(mockMessageService.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              severity: 'error',
+              summary: 'Error de respaldo',
+              detail: 'No se pudo completar el respaldo en Google Drive.',
+            }),
+          );
+        } finally {
+          fixture.destroy();
+          vi.useRealTimers();
+        }
+      });
+
+      it('should stop polling automatically after 15 attempts when status stays PENDING', async () => {
+        vi.useFakeTimers();
+        try {
+          mockDocumentService.getDriveSyncStatus.mockResolvedValue({
+            drive_sync_status: 'PENDING',
+            drive_file_id: null,
+            drive_sync_error: null,
+            drive_synced_at: null,
+          });
+
+          component.startDriveSyncPolling('doc-timeout');
+
+          await vi.advanceTimersByTimeAsync(2000 * 20);
+
+          expect(mockDocumentService.getDriveSyncStatus).toHaveBeenCalledTimes(15);
+          expect(mockMessageService.add).not.toHaveBeenCalled();
+        } finally {
+          fixture.destroy();
+          vi.useRealTimers();
+        }
+      });
+
+      it('should avoid creating duplicate polling loops for the same documentId', async () => {
+        vi.useFakeTimers();
+        try {
+          mockDocumentService.getDriveSyncStatus.mockResolvedValue({
+            drive_sync_status: 'PENDING',
+            drive_file_id: null,
+            drive_sync_error: null,
+            drive_synced_at: null,
+          });
+
+          component.startDriveSyncPolling('doc-dup');
+          component.startDriveSyncPolling('doc-dup');
+
+          await vi.advanceTimersByTimeAsync(2000);
+
+          expect(mockDocumentService.getDriveSyncStatus).toHaveBeenCalledTimes(1);
+        } finally {
+          fixture.destroy();
+          vi.useRealTimers();
+        }
+      });
+
+      it('should clear active polling timers when component is destroyed', async () => {
+        vi.useFakeTimers();
+        try {
+          component.startDriveSyncPolling('doc-destroy');
+          fixture.destroy();
+
+          await vi.advanceTimersByTimeAsync(10000);
+
+          expect(mockDocumentService.getDriveSyncStatus).not.toHaveBeenCalled();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('should show initial sync toast and start polling when approving a document via saveStatus', async () => {
+        vi.useFakeTimers();
+        try {
+          const reviewedDoc: Document = {
+            ...mockDocuments[0],
+            id: 'doc-rev-approve',
+            status: 'REVIEWED',
+            drive_sync_status: null,
+          };
+          mockDocumentService.documents.set([reviewedDoc]);
+          mockDocumentService.loadDocuments.mockImplementationOnce(async () => {
+            mockDocumentService.documents.set([
+              { ...reviewedDoc, status: 'APPROVED', drive_sync_status: 'PENDING' },
+            ]);
+          });
+          mockDocumentService.getDriveSyncStatus.mockResolvedValueOnce({
+            drive_sync_status: 'SYNCED',
+            drive_file_id: 'drive-approved-1',
+            drive_sync_error: null,
+            drive_synced_at: '2026-11-20T22:30:00Z',
+          });
+
+          component.openStatusModal(reviewedDoc);
+          await component.saveStatus();
+
+          expect(mockMessageService.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              severity: 'info',
+              summary: 'Respaldo',
+              detail: 'Iniciando respaldo en Google Drive...',
+            }),
+          );
+
+          await vi.advanceTimersByTimeAsync(2000);
+
+          expect(mockDocumentService.getDriveSyncStatus).toHaveBeenCalledWith('doc-rev-approve');
+          expect(mockMessageService.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              severity: 'success',
+              summary: 'Respaldo completado',
+              detail: 'El documento se respaldó correctamente en Google Drive.',
+            }),
+          );
+        } finally {
+          fixture.destroy();
+          vi.useRealTimers();
+        }
       });
     });
   });

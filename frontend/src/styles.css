@@ -434,3 +434,35 @@ p-dialog .p-button.border-none {
   border: none !important;
   outline: none !important;
 }
+
+/* Minimalist PrimeNG tooltip (tooltipStyleClass="sgc-tooltip") */
+.p-tooltip.sgc-tooltip {
+  max-width: 240px !important;
+}
+
+.p-tooltip.sgc-tooltip .p-tooltip-text {
+  font-size: 0.78rem !important;
+  line-height: 1.4 !important;
+  padding: 0.45rem 0.65rem !important;
+  border-radius: 8px !important;
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+  word-break: break-word;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-top .p-tooltip-arrow {
+  border-top-color: #1e293b !important;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-bottom .p-tooltip-arrow {
+  border-bottom-color: #1e293b !important;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-left .p-tooltip-arrow {
+  border-left-color: #1e293b !important;
+}
+
+.p-tooltip.sgc-tooltip.p-tooltip-right .p-tooltip-arrow {
+  border-right-color: #1e293b !important;
+}

@@ -4,16 +4,17 @@
  * Triggered by a Supabase Database Webhook on public.documents.
  * Processes approved documents upon approval transition or manual retry
  * (`drive_sync_status === 'PENDING'`), downloads the PDF from Supabase Storage,
- * authenticates with Google Drive API v3 via Service Account RS256 JWT
- * using Deno's native Web Crypto API, uploads the PDF into the target folder,
- * and persists the synchronization outcome back to public.documents.
+ * authenticates with Google Drive API v3 via OAuth 2.0 Refresh Token,
+ * uploads the PDF into the target folder, and persists the synchronization
+ * outcome (with concise Spanish messages for end-user display) back to public.documents.
  *
  * Required environment variables:
- *   - SUPABASE_URL                 : Supabase project URL (auto-injected)
- *   - SUPABASE_SERVICE_ROLE_KEY    : Service-role key for admin DB/Storage access (auto-injected)
- *   - GOOGLE_SERVICE_ACCOUNT_EMAIL : Google Service Account email
- *   - GOOGLE_PRIVATE_KEY           : Service Account PKCS#8 private key (PEM)
- *   - GOOGLE_DRIVE_FOLDER_ID       : Target Google Drive folder ID
+ *   - SUPABASE_URL               : Supabase project URL (auto-injected)
+ *   - SUPABASE_SERVICE_ROLE_KEY  : Service-role key for admin DB/Storage access (auto-injected)
+ *   - GOOGLE_CLIENT_ID           : Google OAuth 2.0 Client ID
+ *   - GOOGLE_CLIENT_SECRET       : Google OAuth 2.0 Client Secret
+ *   - GOOGLE_REFRESH_TOKEN       : Google OAuth 2.0 Refresh Token
+ *   - GOOGLE_DRIVE_FOLDER_ID     : Target Google Drive folder ID
  */
 
 import { serve } from "std/server";
@@ -25,9 +26,22 @@ const STORAGE_BUCKET = "sgc-files";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_UPLOAD_URL =
   "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true";
-const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const APPROVED_STATUSES = new Set(["APPROVED", "Aprobado"]);
 const MAX_ERROR_LENGTH = 500;
+
+type SyncErrorStage = "auth" | "storage" | "drive";
+
+class SyncStageError extends Error {
+  readonly stage: SyncErrorStage;
+  readonly httpStatus?: number;
+
+  constructor(stage: SyncErrorStage, message: string, httpStatus?: number) {
+    super(message);
+    this.name = "SyncStageError";
+    this.stage = stage;
+    this.httpStatus = httpStatus;
+  }
+}
 
 interface DocumentRecord {
   id: number;
@@ -126,88 +140,57 @@ function formatDriveFileName(record: DocumentRecord): string {
   return `[${code}] ${title} (${formattedVersion}).pdf`;
 }
 
-function base64UrlEncodeBytes(bytes: Uint8Array): string {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    const chunk = bytes.subarray(offset, offset + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function base64UrlEncodeJson(obj: Record<string, unknown>): string {
-  const encoded = new TextEncoder().encode(JSON.stringify(obj));
-  return base64UrlEncodeBytes(encoded);
-}
-
 /**
- * Normalizes escaped newlines in a PEM string and extracts raw PKCS#8 DER bytes.
+ * Maps internal sync failure stages to concise, user-friendly Spanish messages
+ * suitable for storing in `public.documents.drive_sync_error` and displaying in the UI.
  */
-function pemToPkcs8Der(privateKeyPem: string): Uint8Array {
-  const normalized = privateKeyPem.replace(/\\n/g, "\n");
-  const base64Body = normalized
-    .replace(/-----BEGIN [^-]+-----/g, "")
-    .replace(/-----END [^-]+-----/g, "")
-    .replace(/\s+/g, "");
-
-  if (!base64Body) {
-    throw new Error("Google private key PEM content is empty or invalid.");
+function toUserFriendlySpanishError(
+  stage: "auth" | "storage" | "drive",
+  status?: number,
+): string {
+  if (stage === "auth") {
+    return "Error de autenticación con Google Drive. Verifique las credenciales.";
   }
-
-  const binary = atob(base64Body);
-  const derBytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    derBytes[i] = binary.charCodeAt(i);
+  if (stage === "storage") {
+    return "No se pudo obtener el archivo PDF desde el almacenamiento interno.";
   }
-  return derBytes;
+  if (status === 404) {
+    return "No se encontró la carpeta destino configurada en Google Drive.";
+  }
+  if (status === 403) {
+    return "Permisos insuficientes o cuota excedida en Google Drive.";
+  }
+  return "No se pudo completar el respaldo en Google Drive. Intente nuevamente.";
 }
 
 /**
- * Generates an RS256-signed Service Account JWT using Web Crypto and exchanges
- * it for a short-lived Google OAuth2 access token.
- * Never logs the private key, JWT assertion, or returned access token.
+ * Exchanges a Google OAuth 2.0 Refresh Token for a short-lived access token.
+ * Never logs client_secret, refresh_token, or the returned access_token.
  */
 async function getGoogleAccessToken(
-  serviceAccountEmail: string,
-  privateKeyPem: string,
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string,
 ): Promise<string> {
-  const derBytes = pemToPkcs8Der(privateKeyPem);
-  const cryptoKey = await crypto.subtle.importKey(
-    "pkcs8",
-    derBytes.buffer as ArrayBuffer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const headerSegment = base64UrlEncodeJson({ alg: "RS256", typ: "JWT" });
-  const claimSegment = base64UrlEncodeJson({
-    iss: serviceAccountEmail,
-    scope: GOOGLE_DRIVE_SCOPE,
-    aud: GOOGLE_TOKEN_URL,
-    iat: nowSeconds,
-    exp: nowSeconds + 3600,
-  });
-
-  const signingInput = `${headerSegment}.${claimSegment}`;
-  const signatureBuffer = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    cryptoKey,
-    new TextEncoder().encode(signingInput),
-  );
-  const signatureSegment = base64UrlEncodeBytes(new Uint8Array(signatureBuffer));
-  const assertion = `${signingInput}.${signatureSegment}`;
-
-  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }).toString(),
-  });
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }).toString(),
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Network error";
+    throw new SyncStageError(
+      "auth",
+      `Google OAuth2 token request failed: ${reason}`,
+    );
+  }
 
   let tokenBody: GoogleTokenResponse = {};
   try {
@@ -221,7 +204,11 @@ async function getGoogleAccessToken(
       tokenBody.error_description ??
       tokenBody.error ??
       `HTTP ${tokenResponse.status}`;
-    throw new Error(`Google OAuth2 token exchange failed: ${reason}`);
+    throw new SyncStageError(
+      "auth",
+      `Google OAuth2 token refresh failed (HTTP ${tokenResponse.status}): ${reason}`,
+      tokenResponse.status,
+    );
   }
 
   return tokenBody.access_token;
@@ -273,14 +260,23 @@ async function uploadPdfToGoogleDrive(
 
   const multipartBody = buildMultipartRelatedBody(metadata, pdfBytes, boundary);
 
-  const uploadResponse = await fetch(GOOGLE_DRIVE_UPLOAD_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
-    },
-    body: multipartBody.buffer as ArrayBuffer,
-  });
+  let uploadResponse: Response;
+  try {
+    uploadResponse = await fetch(GOOGLE_DRIVE_UPLOAD_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body: multipartBody.buffer as ArrayBuffer,
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Network error";
+    throw new SyncStageError(
+      "drive",
+      `Google Drive upload request failed: ${reason}`,
+    );
+  }
 
   let uploadBody: DriveUploadResponse = {};
   try {
@@ -292,7 +288,11 @@ async function uploadPdfToGoogleDrive(
   if (!uploadResponse.ok || !uploadBody.id) {
     const reason =
       uploadBody.error?.message ?? `HTTP ${uploadResponse.status}`;
-    throw new Error(`Google Drive upload failed: ${reason}`);
+    throw new SyncStageError(
+      "drive",
+      `Google Drive upload failed (HTTP ${uploadResponse.status}): ${reason}`,
+      uploadResponse.status,
+    );
   }
 
   return uploadBody.id;
@@ -383,25 +383,41 @@ serve(async (req: Request): Promise<Response> => {
     auth: { persistSession: false },
   });
 
-  // 4. Execute Storage download, Google OAuth2 auth, Drive upload, and status persistence
+  // 4. Execute Storage download, Google OAuth 2.0 auth, Drive upload, and status persistence
   try {
-    const serviceAccountEmail = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
-    const privateKeyPem = Deno.env.get("GOOGLE_PRIVATE_KEY");
+    const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID");
+    const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+    const googleRefreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
     const driveFolderId = Deno.env.get("GOOGLE_DRIVE_FOLDER_ID");
 
-    if (!serviceAccountEmail || !privateKeyPem || !driveFolderId) {
-      throw new Error(
-        "Missing Google Drive credentials or target folder configuration.",
+    if (!googleClientId || !googleClientSecret || !googleRefreshToken) {
+      throw new SyncStageError(
+        "auth",
+        "Missing Google OAuth 2.0 credentials (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REFRESH_TOKEN).",
+      );
+    }
+
+    if (!driveFolderId) {
+      throw new SyncStageError(
+        "drive",
+        "Missing GOOGLE_DRIVE_FOLDER_ID environment variable.",
+        404,
       );
     }
 
     if (!record.file_url) {
-      throw new Error("Document record has no file_url to download.");
+      throw new SyncStageError(
+        "storage",
+        "Document record has no file_url to download.",
+      );
     }
 
     const storagePath = extractStoragePath(record.file_url);
     if (!storagePath) {
-      throw new Error("Unable to resolve storage file path from file_url.");
+      throw new SyncStageError(
+        "storage",
+        "Unable to resolve storage file path from file_url.",
+      );
     }
 
     console.log(
@@ -413,19 +429,30 @@ serve(async (req: Request): Promise<Response> => {
       .download(storagePath);
 
     if (storageError || !blobData) {
-      throw new Error(
+      throw new SyncStageError(
+        "storage",
         `Supabase Storage download failed: ${storageError?.message ?? "Empty response"}`,
       );
     }
 
-    const pdfBytes = new Uint8Array(await blobData.arrayBuffer());
+    let pdfBytes: Uint8Array;
+    try {
+      pdfBytes = new Uint8Array(await blobData.arrayBuffer());
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "Failed to read PDF buffer";
+      throw new SyncStageError(
+        "storage",
+        `Failed to read PDF buffer from Supabase Storage: ${reason}`,
+      );
+    }
 
     console.log(
-      `[sync-document-to-drive] Authenticating with Google Drive Service Account for document ${record.id}`,
+      `[sync-document-to-drive] Authenticating with Google OAuth 2.0 for document ${record.id}`,
     );
     const accessToken = await getGoogleAccessToken(
-      serviceAccountEmail,
-      privateKeyPem,
+      googleClientId,
+      googleClientSecret,
+      googleRefreshToken,
     );
 
     const fileName = formatDriveFileName(record);
@@ -481,20 +508,25 @@ serve(async (req: Request): Promise<Response> => {
       200,
     );
   } catch (err) {
-    const errorMessage =
+    const technicalMessage =
       err instanceof Error ? err.message : "Unexpected Google Drive sync error";
 
     console.error(
-      `[sync-document-to-drive] Sync failed for document ${record.id}: ${errorMessage}`,
+      `[sync-document-to-drive] Sync failed for document ${record.id}: ${technicalMessage}`,
     );
 
-    await recordSyncError(adminClient, record.id, errorMessage);
+    const userFriendlyError =
+      err instanceof SyncStageError
+        ? toUserFriendlySpanishError(err.stage, err.httpStatus)
+        : toUserFriendlySpanishError("drive");
+
+    await recordSyncError(adminClient, record.id, userFriendlyError);
 
     return jsonResponse(
       {
         success: false,
         document_id: record.id,
-        error: errorMessage,
+        error: userFriendlyError,
       },
       200,
     );
