@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DashboardService } from './dashboard.service';
 import { DocumentService } from './document.service';
 import type { DashboardMetrics } from '../models/dashboard.model';
+import type { Document } from '../models/document.model';
 
 describe('DashboardService', () => {
   let service: DashboardService;
@@ -75,7 +76,7 @@ describe('DashboardService', () => {
       const rpcSpy = vi.spyOn(service.supabase, 'rpc').mockResolvedValueOnce({
         data: mockMetrics,
         error: null,
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof service.supabase.rpc>>);
 
       const result = await service.getDashboardMetrics();
 
@@ -93,7 +94,7 @@ describe('DashboardService', () => {
       vi.spyOn(service.supabase, 'rpc').mockResolvedValueOnce({
         data: null,
         error: { message: 'function get_dashboard_metrics() does not exist' },
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof service.supabase.rpc>>);
 
       await expect(service.getDashboardMetrics()).rejects.toThrow(
         'Error al obtener métricas del dashboard: function get_dashboard_metrics() does not exist',
@@ -103,7 +104,7 @@ describe('DashboardService', () => {
 
   describe('Delegated document methods', () => {
     it('should delegate getPendingDocuments to DocumentService', async () => {
-      const pendingDocs = [{ id: 'doc-1', title: 'Test Document' }] as any;
+      const pendingDocs = [{ id: 'doc-1', title: 'Test Document' }] as unknown as Document[];
       mockDocumentService.getPendingDocuments.mockResolvedValueOnce(pendingDocs);
 
       const result = await service.getPendingDocuments('usr-1', ['quality', 'operations']);

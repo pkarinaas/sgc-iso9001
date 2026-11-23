@@ -32,7 +32,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       const nextVersion = await service.getNextVersionForCode('PE-03');
 
@@ -51,7 +51,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ data: [{ version: 2 }], error: null }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       const nextVersion = await service.getNextVersionForCode('PE-03');
 
@@ -68,7 +68,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         limit: vi.fn().mockResolvedValue({ data: [], error: null }),
         insert: vi.fn().mockResolvedValue({ error: null }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       const uploadMock = vi.fn().mockResolvedValue({ error: null });
       const getPublicUrlMock = vi.fn().mockReturnValue({
@@ -77,7 +77,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       vi.spyOn(supabase.storage, 'from').mockReturnValue({
         upload: uploadMock,
         getPublicUrl: getPublicUrlMock,
-      } as any);
+      } as unknown as ReturnType<typeof supabase.storage.from>);
 
       const dummyFile = new File(['dummy content'], 'doc.pdf', { type: 'application/pdf' });
 
@@ -115,7 +115,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         limit: vi.fn().mockResolvedValue({ data: [{ version: 1 }], error: null }),
         insert: vi.fn().mockResolvedValue({ error: null }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       const uploadMock = vi.fn().mockResolvedValue({ error: null });
       const getPublicUrlMock = vi.fn().mockReturnValue({
@@ -124,7 +124,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       vi.spyOn(supabase.storage, 'from').mockReturnValue({
         upload: uploadMock,
         getPublicUrl: getPublicUrlMock,
-      } as any);
+      } as unknown as ReturnType<typeof supabase.storage.from>);
 
       const dummyFile = new File(['dummy content'], 'doc.pdf', { type: 'application/pdf' });
 
@@ -154,8 +154,8 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
   describe('extractFilePath (SCRUM-54)', () => {
     it('should return empty string if input is empty or null', () => {
       expect(service.extractFilePath('')).toBe('');
-      expect(service.extractFilePath(null as any)).toBe('');
-      expect(service.extractFilePath(undefined as any)).toBe('');
+      expect(service.extractFilePath(null as unknown as string)).toBe('');
+      expect(service.extractFilePath(undefined as unknown as string)).toBe('');
     });
 
     it('should return the relative path as-is if not an HTTP/HTTPS URL', () => {
@@ -195,7 +195,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       });
       vi.spyOn(supabase.storage, 'from').mockReturnValue({
         createSignedUrl: createSignedUrlMock,
-      } as any);
+      } as unknown as ReturnType<typeof supabase.storage.from>);
 
       const result = await service.getSignedDocumentUrl('https://proj.supabase.co/storage/v1/object/public/sgc-files/doc.pdf');
 
@@ -205,14 +205,14 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
     });
 
     it('should handle Supabase storage error gracefully and return null', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const createSignedUrlMock = vi.fn().mockResolvedValue({
         data: null,
         error: { message: 'Object not found' },
       });
       vi.spyOn(supabase.storage, 'from').mockReturnValue({
         createSignedUrl: createSignedUrlMock,
-      } as any);
+      } as unknown as ReturnType<typeof supabase.storage.from>);
 
       const result = await service.getSignedDocumentUrl('missing-file.pdf');
 
@@ -222,7 +222,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
     });
 
     it('should handle unexpected exception gracefully and return null', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       vi.spyOn(supabase.storage, 'from').mockImplementation(() => {
         throw new Error('Network failure');
       });
@@ -249,7 +249,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       });
       vi.spyOn(supabase.storage, 'from').mockReturnValue({
         download: downloadMock,
-      } as any);
+      } as unknown as ReturnType<typeof supabase.storage.from>);
 
       await expect(
         service.downloadWatermarkedDocument('PE-03.pdf', 'PE-03'),
@@ -268,12 +268,12 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       });
       vi.spyOn(supabase.storage, 'from').mockReturnValue({
         download: downloadMock,
-      } as any);
+      } as unknown as ReturnType<typeof supabase.storage.from>);
 
       const createObjectURLSpy = vi
         .spyOn(URL, 'createObjectURL')
         .mockReturnValue('blob:http://localhost/mock-blob-url');
-      const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+      const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 
       let createdAnchor: HTMLAnchorElement | null = null;
       const originalCreateElement = document.createElement.bind(document);
@@ -281,7 +281,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         const el = originalCreateElement(tagName);
         if (tagName === 'a') {
           createdAnchor = el as HTMLAnchorElement;
-          vi.spyOn(createdAnchor, 'click').mockImplementation(() => {});
+          vi.spyOn(createdAnchor, 'click').mockImplementation(() => undefined);
         }
         return el;
       });
@@ -313,7 +313,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ error: null }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       await service.updateDocument('doc-123', {
         title: 'Updated Title',
@@ -338,7 +338,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ error: { message: 'new row violates row-level security policy' } }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       await expect(
         service.updateDocument('doc-123', { title: 'Title' }),
@@ -366,23 +366,23 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         { document_id: 101 },
       ];
 
-      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      vi.spyOn(supabase, 'from').mockImplementation(((table: string) => {
         if (table === 'documents') {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             in: vi.fn().mockReturnThis(),
             order: vi.fn().mockResolvedValue({ data: mockApprovedDocs, error: null }),
-          } as any;
+          };
         }
         if (table === 'document_acknowledgements') {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockResolvedValue({ data: mockAcknowledgements, error: null }),
-          } as any;
+          };
         }
-        return {} as any;
-      });
+        return {};
+      }) as unknown as typeof supabase.from);
 
       const pending = await service.getPendingDocuments('usr-1', ['quimica_clinica', 'hematologia']);
 
@@ -397,23 +397,23 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         { id: 101, title: 'Doc 1', status: 'APPROVED', process_area: 'quimica_clinica' },
       ];
 
-      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      vi.spyOn(supabase, 'from').mockImplementation(((table: string) => {
         if (table === 'documents') {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             in: vi.fn().mockReturnThis(),
             order: vi.fn().mockResolvedValue({ data: mockApprovedDocs, error: null }),
-          } as any;
+          };
         }
         if (table === 'document_acknowledgements') {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-          } as any;
+          };
         }
-        return {} as any;
-      });
+        return {};
+      }) as unknown as typeof supabase.from);
 
       const pending = await service.getPendingDocuments('usr-1', ['quimica_clinica']);
 
@@ -438,7 +438,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockResolvedValue({ data: mockInserted, error: null }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       const result = await service.acknowledgeDocument('doc-101', 'usr-1');
 
@@ -458,7 +458,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
           error: { message: 'row-level security policy violated' },
         }),
       };
-      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as any);
+      vi.spyOn(supabase, 'from').mockReturnValue(mockQueryBuilder as unknown as ReturnType<typeof supabase.from>);
 
       await expect(service.acknowledgeDocument('doc-101', 'usr-1')).rejects.toThrow(
         'No tienes permisos para realizar esta operación en la base de datos.',
@@ -475,7 +475,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       const rpcSpy = vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
         data: mockMetrics,
         error: null,
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
 
       const result = await service.getDashboardMetrics();
 
@@ -487,7 +487,7 @@ describe('DocumentService - Versioning & Creation (SCRUM-20 Subtask 4)', () => {
       vi.spyOn(supabase, 'rpc').mockResolvedValueOnce({
         data: null,
         error: { message: 'permission denied for function get_dashboard_metrics' },
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof supabase.rpc>>);
 
       await expect(service.getDashboardMetrics()).rejects.toThrow(
         'Error al obtener métricas del dashboard',

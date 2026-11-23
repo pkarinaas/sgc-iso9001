@@ -439,9 +439,12 @@
 
     <!-- Upload component -->
     <div class="doc-form-field">
-      <label class="doc-form-label"> Archivo PDF <span class="required-mark">*</span> </label>
+      <label for="input-doc-file" class="doc-form-label">
+        Archivo PDF <span class="required-mark">*</span>
+      </label>
       <p-fileupload
         #fileUpload
+        id="input-doc-file"
         mode="basic"
         chooseLabel="Seleccionar PDF"
         accept="application/pdf"

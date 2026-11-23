@@ -46,3 +46,12 @@ export interface Document {
   created_at: string;
   updated_at: string;
 }
+
+/** Represents a row in the public.document_acknowledgements table. */
+export interface DocumentAcknowledgement {
+  id: string;
+  document_id: string | number;
+  user_id: string;
+  acknowledged_at?: string;
+  signature_hash?: string | null;
+}

@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { FilterService, MessageService, ConfirmationService } from 'primeng/api';
+import { FilterService, MessageService, ConfirmationService, type Confirmation } from 'primeng/api';
+import type { Table } from 'primeng/table';
+import type { Select } from 'primeng/select';
 
 const mockSavePdf = vi.fn();
 vi.mock('jspdf', () => {
@@ -18,12 +20,12 @@ vi.mock('jspdf', () => {
 
 const mockAutoTable = vi.fn();
 vi.mock('jspdf-autotable', () => ({
-  default: (...args: any[]) => mockAutoTable(...args),
+  default: (...args: unknown[]) => mockAutoTable(...args),
 }));
 
 const mockSaveAs = vi.fn();
 vi.mock('file-saver', () => ({
-  saveAs: (...args: any[]) => mockSaveAs(...args),
+  saveAs: (...args: unknown[]) => mockSaveAs(...args),
 }));
 
 import * as XLSX from 'xlsx';
@@ -268,7 +270,7 @@ describe('DocumentListComponent', () => {
 
   it('should update selectedStatus and filter documents table on status change', () => {
     const filterSpy = vi.fn();
-    const mockTable = { filter: filterSpy } as any;
+    const mockTable = { filter: filterSpy } as unknown as Table;
 
     component.onStatusChange({ value: 'APPROVED' }, mockTable);
 
@@ -282,8 +284,8 @@ describe('DocumentListComponent', () => {
 
   it('should call hide on the select component when onStatusChange is triggered', () => {
     const filterSpy = vi.fn();
-    const mockTable = { filter: filterSpy } as any;
-    const mockSelect = { hide: vi.fn() } as any;
+    const mockTable = { filter: filterSpy } as unknown as Table;
+    const mockSelect = { hide: vi.fn() } as unknown as Select;
 
     component.onStatusChange({ value: 'REVIEWED' }, mockTable, mockSelect);
 
@@ -324,9 +326,9 @@ describe('DocumentListComponent', () => {
 
   it('should call deleteDocument, show success toast and reload documents when delete is accepted', async () => {
     const confirmationService = fixture.debugElement.injector.get(ConfirmationService);
-    let acceptCallback: (() => Promise<void>) | undefined;
-    vi.spyOn(confirmationService, 'confirm').mockImplementation((config: any) => {
-      acceptCallback = config.accept;
+    let acceptCallback: (() => unknown) | undefined;
+    vi.spyOn(confirmationService, 'confirm').mockImplementation((config: Confirmation) => {
+      acceptCallback = config.accept as (() => unknown) | undefined;
       return confirmationService;
     });
 
@@ -352,9 +354,9 @@ describe('DocumentListComponent', () => {
       new Error('Violates row-level security policy'),
     );
     const confirmationService = fixture.debugElement.injector.get(ConfirmationService);
-    let acceptCallback: (() => Promise<void>) | undefined;
-    vi.spyOn(confirmationService, 'confirm').mockImplementation((config: any) => {
-      acceptCallback = config.accept;
+    let acceptCallback: (() => unknown) | undefined;
+    vi.spyOn(confirmationService, 'confirm').mockImplementation((config: Confirmation) => {
+      acceptCallback = config.accept as (() => unknown) | undefined;
       return confirmationService;
     });
 
@@ -1028,7 +1030,7 @@ describe('DocumentListComponent', () => {
       });
 
       it('should call exportPdf when PDF menu item command is triggered', () => {
-        const exportPdfSpy = vi.spyOn(component, 'exportPdf').mockImplementation(() => {});
+        const exportPdfSpy = vi.spyOn(component, 'exportPdf').mockImplementation(() => undefined);
 
         component.exportMenuItems[0].command?.({
           originalEvent: new Event('click'),
@@ -1039,7 +1041,7 @@ describe('DocumentListComponent', () => {
       });
 
       it('should call exportExcel when Excel menu item command is triggered', () => {
-        const exportExcelSpy = vi.spyOn(component, 'exportExcel').mockImplementation(() => {});
+        const exportExcelSpy = vi.spyOn(component, 'exportExcel').mockImplementation(() => undefined);
 
         component.exportMenuItems[1].command?.({
           originalEvent: new Event('click'),
@@ -1151,7 +1153,7 @@ describe('DocumentListComponent', () => {
         component.exportExcel();
 
         expect(jsonToSheetSpy).toHaveBeenCalled();
-        const exportedRows = jsonToSheetSpy.mock.calls[0][0] as any[];
+        const exportedRows = jsonToSheetSpy.mock.calls[0][0] as Record<string, string>[];
         expect(exportedRows[0]).toHaveProperty('Fecha');
         expect(exportedRows[0]['Fecha']).toBe(
           component.getFormattedDocumentDate(mockDocuments[0]),

@@ -2,10 +2,12 @@ import { Injectable, signal } from '@angular/core';
 import { supabase } from '../supabase/supabase.client';
 import type {
   Document,
+  DocumentAcknowledgement,
   DocumentStatus,
   DriveSyncSnapshot,
   DriveSyncStatus,
 } from '../models/document.model';
+import type { DashboardMetrics } from '../models/dashboard.model';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 
 /**
@@ -251,7 +253,10 @@ export class DocumentService {
    * @returns Supabase response or inserted acknowledgement record.
    * @throws Error if documentId or userId is missing or if DB insertion fails.
    */
-  async acknowledgeDocument(documentId: string | number, userId: string): Promise<any> {
+  async acknowledgeDocument(
+    documentId: string | number,
+    userId: string,
+  ): Promise<DocumentAcknowledgement[] | null> {
     if (!documentId || !userId) {
       throw new Error('Faltan datos obligatorios para confirmar la lectura.');
     }
@@ -267,7 +272,7 @@ export class DocumentService {
       );
     }
 
-    return data;
+    return data as DocumentAcknowledgement[] | null;
   }
 
   /**
@@ -276,7 +281,7 @@ export class DocumentService {
    * @returns Aggregated metrics payload containing documentsByStatus and totalAcknowledgements.
    * @throws Error if the RPC execution fails.
    */
-  async getDashboardMetrics(): Promise<any> {
+  async getDashboardMetrics(): Promise<DashboardMetrics> {
     const { data, error } = await this.supabase.rpc('get_dashboard_metrics');
 
     if (error) {
@@ -285,7 +290,7 @@ export class DocumentService {
       );
     }
 
-    return data;
+    return data as DashboardMetrics;
   }
 
   /**
@@ -554,7 +559,7 @@ export class DocumentService {
     const link = document.createElement('a');
     link.href = blobUrl;
 
-    const baseCode = (documentCode || 'DOCUMENTO').trim().replace(/[\/\\]/g, '_');
+    const baseCode = (documentCode || 'DOCUMENTO').trim().replace(/[/\\]/g, '_');
     const safeTitle = (documentTitle || 'UNTITLED').trim().replace(/[^a-zA-Z0-9]/g, '_');
 
     link.download = `${baseCode}_${safeTitle}_COPIA_NO_CONTROLADA.pdf`;

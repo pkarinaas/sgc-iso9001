@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { supabase } from '../supabase/supabase.client';
 import { DocumentService } from './document.service';
-import type { Document } from '../models/document.model';
+import type { Document, DocumentAcknowledgement } from '../models/document.model';
 import type { DashboardMetrics } from '../models/dashboard.model';
 
 /**
@@ -51,7 +51,10 @@ export class DashboardService {
    * @param userId - UUID of the user.
    * @returns Supabase response.
    */
-  async acknowledgeDocument(documentId: string | number, userId: string): Promise<any> {
+  async acknowledgeDocument(
+    documentId: string | number,
+    userId: string,
+  ): Promise<DocumentAcknowledgement[] | null> {
     return this.documentService.acknowledgeDocument(documentId, userId);
   }
 }

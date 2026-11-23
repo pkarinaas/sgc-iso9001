@@ -23,13 +23,13 @@ import { Tooltip } from 'primeng/tooltip';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { ProgressBar } from 'primeng/progressbar';
-import { Chart } from 'chart.js/auto';
+import { Chart, type ChartData, type ChartOptions } from 'chart.js/auto';
 import { PdfViewerComponent } from '../../shared/components/pdf-viewer/pdf-viewer.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DocumentService } from '../../core/services/document.service';
 import { DashboardService } from '../../core/services/dashboard.service';
 import type { Document } from '../../core/models/document.model';
-import type { User } from '../../core/models/user.model';
+import { extractRoleName, type User } from '../../core/models/user.model';
 import type { DashboardMetrics, PendingDocumentDetail } from '../../core/models/dashboard.model';
 
 /**
@@ -104,10 +104,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   pendingDetails: PendingDocumentDetail[] = [];
 
   /** Chart.js data configuration for the documents by status chart. */
-  chartData: any = null;
+  chartData: ChartData<'doughnut', number[], string> | null = null;
 
   /** Chart.js display options for the documents by status chart. */
-  chartOptions: any = null;
+  chartOptions: ChartOptions<'doughnut'> | null = null;
 
   /** Promise tracking the pending documents load operation. */
   initPromise?: Promise<void>;
@@ -119,8 +119,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   get isAdmin(): boolean {
     const user = this.currentUser();
     const role =
-      user?.roles?.name ??
-      (Array.isArray(user?.roles) ? (user.roles as any)[0]?.name : null) ??
+      extractRoleName(user?.roles) ??
       (typeof this.authService.userRole === 'function' ? this.authService.userRole() : null);
 
     return role?.toUpperCase() === 'ADMIN';
@@ -252,7 +251,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.chartInstance = new Chart(ctx, {
       type: 'doughnut',
       data: this.chartData,
-      options: this.chartOptions,
+      options: this.chartOptions ?? undefined,
     });
 
     // Hide 'Obsoleto' (index 3) by default while keeping it toggleable in the legend

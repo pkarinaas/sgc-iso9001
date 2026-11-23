@@ -66,7 +66,7 @@ describe('AuditReportService', () => {
       });
       const fromSpy = vi.spyOn(service.supabase, 'from').mockReturnValue({
         select: selectMock,
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       const promise = service.getAuditRecords();
       expect(service.loading()).toBe(true);
@@ -91,7 +91,7 @@ describe('AuditReportService', () => {
             error: null,
           }),
         }),
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       const result = await service.getAuditRecords();
 
@@ -109,7 +109,7 @@ describe('AuditReportService', () => {
             error: { message: 'permission denied for view audit_acknowledgements_view' },
           }),
         }),
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       await expect(service.getAuditRecords()).rejects.toThrow(
         'Error al obtener registros de auditoría: permission denied for view audit_acknowledgements_view',
@@ -126,7 +126,7 @@ describe('AuditReportService', () => {
         select: vi.fn().mockReturnValue({
           order: vi.fn().mockRejectedValueOnce(new Error('Network failure')),
         }),
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       await expect(service.getAuditRecords()).rejects.toThrow('Network failure');
 

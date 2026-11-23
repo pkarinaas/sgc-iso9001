@@ -92,7 +92,7 @@ describe('UserListComponent', () => {
     if (!component.usersTable) {
       component.usersTable = { filterGlobal: vi.fn() } as unknown as Table;
     } else {
-      vi.spyOn(component.usersTable, 'filterGlobal').mockImplementation(() => {});
+      vi.spyOn(component.usersTable, 'filterGlobal').mockImplementation(() => undefined);
     }
 
     const mockEvent = {
