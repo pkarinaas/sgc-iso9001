@@ -1,0 +1,88 @@
+<p-drawer
+  [visible]="visible"
+  (visibleChange)="onVisibleChange($event)"
+  position="right"
+  [modal]="true"
+  [blockScroll]="true"
+  ariaCloseLabel="Cerrar historial de trazabilidad"
+  styleClass="sgc-history-drawer"
+  [style]="{ width: 'min(500px, 95vw)' }"
+>
+  <ng-template #header>
+    <div class="history-drawer__header">
+      <h2 class="history-drawer__title">Historial de trazabilidad</h2>
+      @if (document) {
+        <p class="history-drawer__subtitle">
+          {{ document.code || 'S/C' }} · {{ document.title }}
+        </p>
+      }
+    </div>
+  </ng-template>
+
+  <div class="history-drawer__body">
+    @if (loading()) {
+      <div class="history-drawer__state">
+        <i class="pi pi-spin pi-spinner history-drawer__state-icon"></i>
+        <p class="history-drawer__state-text">Cargando historial...</p>
+      </div>
+    } @else if (error()) {
+      <div class="history-drawer__state">
+        <i class="pi pi-exclamation-circle history-drawer__error-icon"></i>
+        <p class="history-drawer__error-text">{{ error() }}</p>
+        <button
+          id="btn-retry-history"
+          type="button"
+          pButton
+          class="p-button-outlined p-button-secondary p-button-sm"
+          (click)="loadHistory()"
+        >
+          <i class="pi pi-refresh" pButtonIcon></i>
+          <span pButtonLabel>Reintentar</span>
+        </button>
+      </div>
+    } @else if (entries().length === 0) {
+      <div class="history-drawer__state">
+        <i class="pi pi-history history-drawer__empty-icon"></i>
+        <p class="history-drawer__empty-text">
+          No hay registros de trazabilidad para este documento.
+        </p>
+      </div>
+    } @else {
+      <ol class="history-timeline" aria-label="Línea de tiempo de trazabilidad">
+        @for (entry of entries(); track entry.id) {
+          @let presentation = getPresentation(entry.action);
+          <li class="history-timeline__item">
+            <span
+              class="history-timeline__marker"
+              [class]="'history-timeline__marker timeline-variant--' + presentation.variant"
+              aria-hidden="true"
+            >
+              <i [class]="presentation.icon"></i>
+            </span>
+
+            <article class="history-timeline__card">
+              <div class="history-timeline__card-top">
+                <span
+                  class="history-timeline__badge"
+                  [class]="'history-timeline__badge timeline-variant--' + presentation.variant"
+                >
+                  {{ presentation.label }}
+                </span>
+                <time class="history-timeline__time" [attr.datetime]="entry.created_at">
+                  {{ getTimestamp(entry.created_at) }}
+                </time>
+              </div>
+
+              <p class="history-timeline__detail">{{ getDetail(entry) }}</p>
+
+              <div class="history-timeline__actor">
+                <i class="pi pi-user" aria-hidden="true"></i>
+                <span>{{ getActor(entry) }}</span>
+              </div>
+            </article>
+          </li>
+        }
+      </ol>
+    }
+  </div>
+</p-drawer>

@@ -336,6 +336,22 @@
                 </button>
               }
 
+              <!-- History (Admin & Approver) -->
+              @if (canViewAuditHistory()) {
+                <button
+                  [id]="'btn-history-' + doc.id"
+                  type="button"
+                  class="doc-history-btn"
+                  pTooltip="Ver historial de trazabilidad"
+                  tooltipPosition="top"
+                  tooltipStyleClass="sgc-tooltip"
+                  aria-label="Ver historial de trazabilidad"
+                  (click)="openHistoryDrawer(doc)"
+                >
+                  <i class="pi pi-history"></i>
+                </button>
+              }
+
               <!-- Delete (only for DRAFT and REVIEWED documents) -->
               @if (canDelete(doc)) {
                 <button
@@ -689,3 +705,10 @@
     ></ngx-extended-pdf-viewer>
   }
 </p-dialog>
+
+<!-- Document Traceability History Drawer -->
+<app-document-history-drawer
+  [visible]="isHistoryDrawerVisible"
+  [document]="selectedHistoryDocument"
+  (visibleChange)="onHistoryDrawerVisibleChange($event)"
+/>

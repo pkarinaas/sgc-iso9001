@@ -376,8 +376,28 @@ a.drive-pill--synced:hover {
 
 .col-actions {
   text-align: center !important;
-  width: 11.5rem;
-  min-width: 11.5rem;
+  width: 13.5rem;
+  min-width: 13.5rem;
+}
+
+.doc-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.doc-history-btn:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
 }
 
 /* Sortable header cells */

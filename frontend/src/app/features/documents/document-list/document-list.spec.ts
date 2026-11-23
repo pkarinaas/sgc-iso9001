@@ -31,6 +31,7 @@ vi.mock('file-saver', () => ({
 import * as XLSX from 'xlsx';
 import { DocumentListComponent } from './document-list';
 import { AuthService } from '../../../core/services/auth.service';
+import { AuditReportService } from '../../../core/services/audit-report.service';
 import { DocumentService } from '../../../core/services/document.service';
 import type { Document, DriveSyncSnapshot } from '../../../core/models/document.model';
 
@@ -76,11 +77,16 @@ describe('DocumentListComponent', () => {
     downloadWatermarkedDocument: vi.fn().mockResolvedValue(undefined),
   };
 
+  const mockAuditReportService = {
+    getDocumentHistory: vi.fn().mockResolvedValue([]),
+  };
+
   let mockMessageService: MessageService;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     mockDocumentService.documents.set([...mockDocuments]);
+    mockAuditReportService.getDocumentHistory.mockResolvedValue([]);
     mockDocumentService.retryDriveSync.mockResolvedValue(undefined);
     mockDocumentService.getDriveSyncStatus.mockResolvedValue(null);
     mockDocumentService.updateLocalDriveSyncState.mockImplementation(
@@ -116,6 +122,7 @@ describe('DocumentListComponent', () => {
         FilterService,
         ConfirmationService,
         { provide: AuthService, useValue: mockAuthService },
+        { provide: AuditReportService, useValue: mockAuditReportService },
         { provide: DocumentService, useValue: mockDocumentService },
         { provide: MessageService, useValue: mockMessageService },
       ],
@@ -1649,6 +1656,46 @@ describe('DocumentListComponent', () => {
           fixture.destroy();
           vi.useRealTimers();
         }
+      });
+    });
+
+    describe('Document Traceability History Drawer', () => {
+      it('should show history button for ADMIN and APPROVER and hide it for VIEWER', () => {
+        const doc = mockDocuments[0];
+        component.currentUserRole = 'ADMIN';
+        fixture.detectChanges();
+        const adminBtn = fixture.nativeElement.querySelector(`#btn-history-${doc.id}`);
+        expect(adminBtn).toBeTruthy();
+        expect(adminBtn?.querySelector('.pi-history')).toBeTruthy();
+
+        component.currentUserRole = 'APPROVER';
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector(`#btn-history-${doc.id}`)).toBeTruthy();
+
+        component.currentUserRole = 'VIEWER';
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector(`#btn-history-${doc.id}`)).toBeNull();
+      });
+
+      it('should open history drawer and load document history when clicking history button', async () => {
+        const doc = mockDocuments[0];
+        component.currentUserRole = 'ADMIN';
+        fixture.detectChanges();
+
+        const historyBtn = fixture.nativeElement.querySelector(
+          `#btn-history-${doc.id}`,
+        ) as HTMLButtonElement;
+        historyBtn.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(component.isHistoryDrawerVisible).toBe(true);
+        expect(component.selectedHistoryDocument).toEqual(doc);
+        expect(mockAuditReportService.getDocumentHistory).toHaveBeenCalledWith(doc.id);
+
+        component.onHistoryDrawerVisibleChange(false);
+        expect(component.isHistoryDrawerVisible).toBe(false);
+        expect(component.selectedHistoryDocument).toBeNull();
       });
     });
   });
