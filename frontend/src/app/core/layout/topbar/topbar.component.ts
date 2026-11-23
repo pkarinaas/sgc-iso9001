@@ -15,7 +15,7 @@ import { Tooltip } from 'primeng/tooltip';
 import { PopoverModule } from 'primeng/popover';
 import { AuthService } from '../../services/auth.service';
 import { NotificationService, type AppNotification } from '../../services/notification.service';
-import type { User } from '../../models/user.model';
+import { extractRoleName, type User } from '../../models/user.model';
 
 /**
  * TopbarComponent provides the global header bar for authenticated views.
@@ -76,8 +76,7 @@ export class TopbarComponent implements OnInit {
   readonly userRole = computed(() => {
     const user = this.currentUser();
     const rawRole =
-      user?.roles?.name ??
-      (Array.isArray(user?.roles) ? (user.roles as any)[0]?.name : null) ??
+      extractRoleName(user?.roles) ??
       (typeof this.authService.userRole === 'function' ? this.authService.userRole() : null);
 
     return this.getRoleLabel(rawRole);

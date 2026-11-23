@@ -105,18 +105,22 @@ export class AuditReportsComponent implements OnInit {
     try {
       const [records] = await Promise.all([
         this.auditReportService.getAuditRecords(),
-        this.userService.loadUsers().catch(() => {}),
+        this.userService.loadUsers().catch(() => undefined),
       ]);
 
       this.allRecords.set(records);
       this.populateUserOptions(records);
       this.applyFilters();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading audit report data:', error);
+      const detail =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Error al cargar los registros de auditoría.';
       this.messageService.add({
         severity: 'error',
         summary: 'Error',
-        detail: error?.message || 'Error al cargar los registros de auditoría.',
+        detail,
       });
     } finally {
       this.loading.set(false);

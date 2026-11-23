@@ -17,11 +17,11 @@ export function tick(millis = 0): void {
   vi.advanceTimersByTime(millis);
 }
 
-export function fakeAsync<T extends (...args: any[]) => any>(fn: T): (...args: Parameters<T>) => ReturnType<T> {
-  return (...args: Parameters<T>) => {
+export function fakeAsync<TResult>(fn: () => TResult): () => TResult {
+  return () => {
     vi.useFakeTimers();
     try {
-      return fn(...args);
+      return fn();
     } finally {
       vi.useRealTimers();
     }

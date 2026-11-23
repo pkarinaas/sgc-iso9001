@@ -6,9 +6,21 @@ const mockChartToggleDataVisibility = vi.fn();
 const mockChartUpdate = vi.fn();
 const mockChartDestroy = vi.fn();
 
+interface MockChartInstance {
+  ctx: unknown;
+  config: unknown;
+  toggleDataVisibility: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  destroy: ReturnType<typeof vi.fn>;
+}
+
 vi.mock('chart.js/auto', () => {
   return {
-    Chart: vi.fn().mockImplementation(function (this: any, ctx: any, config: any) {
+    Chart: vi.fn().mockImplementation(function (
+      this: MockChartInstance,
+      ctx: unknown,
+      config: unknown,
+    ) {
       this.ctx = ctx;
       this.config = config;
       this.toggleDataVisibility = mockChartToggleDataVisibility;
@@ -515,27 +527,30 @@ describe('DashboardComponent', () => {
       });
 
       expect(component.chartData).toBeTruthy();
-      expect(component.chartData.labels).toEqual(['Borrador', 'Revisado', 'Aprobado', 'Obsoleto']);
-      expect(component.chartData.datasets[0].data).toEqual([0, 0, 9, 4]);
-      expect(component.chartData.datasets[0].backgroundColor).toEqual([
+      expect(component.chartData?.labels).toEqual(['Borrador', 'Revisado', 'Aprobado', 'Obsoleto']);
+      expect(component.chartData?.datasets[0].data).toEqual([0, 0, 9, 4]);
+      expect(component.chartData?.datasets[0].backgroundColor).toEqual([
         '#f59e0b',
         '#3b82f6',
         '#10b981',
         '#64748b',
       ]);
-      expect(component.chartOptions.cutout).toBe('60%');
-      expect(component.chartOptions.responsive).toBe(true);
-      expect(component.chartOptions.maintainAspectRatio).toBe(false);
+      expect(component.chartOptions?.cutout).toBe('60%');
+      expect(component.chartOptions?.responsive).toBe(true);
+      expect(component.chartOptions?.maintainAspectRatio).toBe(false);
     });
 
     it('should destroy previous chart instance before re-creating or on ngOnDestroy', () => {
       const mockDestroy = vi.fn();
-      (component as any).chartInstance = { destroy: mockDestroy };
+      const chartComponent = component as unknown as {
+        chartInstance: { destroy: () => void } | null;
+      };
+      chartComponent.chartInstance = { destroy: mockDestroy };
 
       component.destroyChart();
 
       expect(mockDestroy).toHaveBeenCalled();
-      expect((component as any).chartInstance).toBeNull();
+      expect(chartComponent.chartInstance).toBeNull();
     });
 
     it('should hide the "Obsoleto" slice by default (index 3) when chart initializes', () => {

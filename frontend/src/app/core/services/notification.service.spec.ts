@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { signal } from '@angular/core';
+import type { Session } from '@supabase/supabase-js';
 import { NotificationService, type AppNotification } from './notification.service';
 import { AuthService } from './auth.service';
 import { supabase } from '../supabase/supabase.client';
@@ -8,7 +9,7 @@ import { supabase } from '../supabase/supabase.client';
 describe('NotificationService', () => {
   let service: NotificationService;
   let authServiceMock: {
-    session: ReturnType<typeof signal<any>>;
+    session: ReturnType<typeof signal<Session | null>>;
   };
 
   let mockChannelInstance: {
@@ -17,7 +18,7 @@ describe('NotificationService', () => {
     unsubscribe: ReturnType<typeof vi.fn>;
   };
 
-  let registeredCallbacks: Record<string, (payload: any) => void> = {};
+  let registeredCallbacks: Record<string, (payload: { new?: AppNotification }) => void> = {};
 
   const sampleNotifications: AppNotification[] = [
     {
@@ -58,8 +59,12 @@ describe('NotificationService', () => {
       session: signal(null),
     };
 
-    vi.spyOn(supabase, 'channel').mockReturnValue(mockChannelInstance as any);
-    vi.spyOn(supabase, 'removeChannel').mockReturnValue(undefined as any);
+    vi.spyOn(supabase, 'channel').mockReturnValue(
+      mockChannelInstance as unknown as ReturnType<typeof supabase.channel>,
+    );
+    vi.spyOn(supabase, 'removeChannel').mockReturnValue(
+      Promise.resolve('ok') as unknown as ReturnType<typeof supabase.removeChannel>,
+    );
 
     TestBed.configureTestingModule({
       providers: [
@@ -96,7 +101,7 @@ describe('NotificationService', () => {
 
       const fromSpy = vi.spyOn(service.supabase, 'from').mockReturnValue({
         select: selectMock,
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       const result = await service.loadNotifications('usr-101');
 
@@ -124,7 +129,7 @@ describe('NotificationService', () => {
             order: vi.fn().mockReturnValue({ limit: limitMock }),
           }),
         }),
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       const result = await service.loadNotifications('usr-101');
 
@@ -258,7 +263,7 @@ describe('NotificationService', () => {
       const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
       const fromSpy = vi.spyOn(service.supabase, 'from').mockReturnValue({
         update: updateMock,
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       await service.markAsRead('notif-1');
 
@@ -275,7 +280,7 @@ describe('NotificationService', () => {
       const eqMock = vi.fn().mockResolvedValueOnce({ error: { message: 'RLS denied' } });
       vi.spyOn(service.supabase, 'from').mockReturnValue({
         update: vi.fn().mockReturnValue({ eq: eqMock }),
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       await service.markAsRead('notif-1');
 
@@ -298,7 +303,7 @@ describe('NotificationService', () => {
       const updateMock = vi.fn().mockReturnValue({ eq: eqUserMock });
       const fromSpy = vi.spyOn(service.supabase, 'from').mockReturnValue({
         update: updateMock,
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       await service.markAllAsRead();
 
@@ -319,7 +324,7 @@ describe('NotificationService', () => {
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({ eq: eqIsReadMock }),
         }),
-      } as any);
+      } as unknown as ReturnType<typeof service.supabase.from>);
 
       await service.markAllAsRead();
 

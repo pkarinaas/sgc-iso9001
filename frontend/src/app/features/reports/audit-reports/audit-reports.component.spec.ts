@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { signal } from '@angular/core';
-import { MessageService } from 'primeng/api';
+import { MessageService, type MenuItemCommandEvent } from 'primeng/api';
 
 const mockSavePdf = vi.fn();
 vi.mock('jspdf', () => {
@@ -18,7 +18,7 @@ vi.mock('jspdf', () => {
 
 const mockAutoTable = vi.fn();
 vi.mock('jspdf-autotable', () => ({
-  default: (...args: any[]) => mockAutoTable(...args),
+  default: (...args: unknown[]) => mockAutoTable(...args),
 }));
 
 const mockWriteFile = vi.fn();
@@ -26,7 +26,7 @@ vi.mock('xlsx', async (importOriginal) => {
   const actual = await importOriginal<typeof import('xlsx')>();
   return {
     ...actual,
-    writeFile: (...args: any[]) => mockWriteFile(...args),
+    writeFile: (...args: unknown[]) => mockWriteFile(...args),
   };
 });
 
@@ -118,13 +118,13 @@ describe('AuditReportsComponent', () => {
 
   let mockAuditReportService: {
     getAuditRecords: ReturnType<typeof vi.fn>;
-    records: any;
-    loading: any;
-    error: any;
+    records: ReturnType<typeof signal<AuditRecord[]>>;
+    loading: ReturnType<typeof signal<boolean>>;
+    error: ReturnType<typeof signal<string | null>>;
   };
 
   let mockUserService: {
-    users: any;
+    users: ReturnType<typeof signal<User[]>>;
     loadUsers: ReturnType<typeof vi.fn>;
   };
 
@@ -420,7 +420,7 @@ describe('AuditReportsComponent', () => {
       component.exportExcel();
 
       expect(jsonToSheetSpy).toHaveBeenCalled();
-      const exportedData = jsonToSheetSpy.mock.calls[0][0] as any[];
+      const exportedData = jsonToSheetSpy.mock.calls[0][0] as Record<string, string>[];
       expect(exportedData).toHaveLength(1);
       expect(exportedData[0]['Documento']).toContain('SGC-PR-002');
       expect(exportedData[0]['Usuario']).toBe('María López');
@@ -434,13 +434,13 @@ describe('AuditReportsComponent', () => {
     });
 
     it('should trigger exportPdf and exportExcel when menu items command is executed', () => {
-      const exportPdfSpy = vi.spyOn(component, 'exportPdf').mockImplementation(() => {});
-      const exportExcelSpy = vi.spyOn(component, 'exportExcel').mockImplementation(() => {});
+      const exportPdfSpy = vi.spyOn(component, 'exportPdf').mockImplementation(() => undefined);
+      const exportExcelSpy = vi.spyOn(component, 'exportExcel').mockImplementation(() => undefined);
 
-      component.exportMenuItems[0].command?.({} as any);
+      component.exportMenuItems[0].command?.({} as MenuItemCommandEvent);
       expect(exportPdfSpy).toHaveBeenCalled();
 
-      component.exportMenuItems[1].command?.({} as any);
+      component.exportMenuItems[1].command?.({} as MenuItemCommandEvent);
       expect(exportExcelSpy).toHaveBeenCalled();
     });
   });

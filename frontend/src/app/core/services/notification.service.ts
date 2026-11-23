@@ -1,5 +1,9 @@
 import { computed, inject, Injectable, OnDestroy, signal } from '@angular/core';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type {
+  RealtimeChannel,
+  RealtimePostgresInsertPayload,
+  RealtimePostgresUpdatePayload,
+} from '@supabase/supabase-js';
 import { supabase } from '../supabase/supabase.client';
 import { AuthService } from './auth.service';
 import type { AppNotification, Notification } from '../models/notification.model';
@@ -152,8 +156,8 @@ export class NotificationService implements OnDestroy {
             schema: 'public',
             table: 'notifications',
           },
-          (payload: any) => {
-            const newRecord = (payload?.new ?? payload?.record ?? payload) as
+          (payload: RealtimePostgresInsertPayload<Record<string, unknown>>) => {
+            const newRecord = this.extractNotificationRecord(payload) as
               | AppNotification
               | undefined;
             const activeUserId = targetUserId ?? this.currentUserId;
@@ -180,10 +184,8 @@ export class NotificationService implements OnDestroy {
             schema: 'public',
             table: 'notifications',
           },
-          (payload: any) => {
-            const updatedRecord = (payload?.new ?? payload?.record ?? payload) as
-              | Partial<AppNotification>
-              | undefined;
+          (payload: RealtimePostgresUpdatePayload<Record<string, unknown>>) => {
+            const updatedRecord = this.extractNotificationRecord(payload);
             const activeUserId = targetUserId ?? this.currentUserId;
 
             if (
@@ -208,6 +210,26 @@ export class NotificationService implements OnDestroy {
       console.error('Error establishing notifications realtime channel:', err);
       return null;
     }
+  }
+
+  /**
+   * Safely extracts the notification payload row from Supabase Realtime events.
+   */
+  private extractNotificationRecord(payload: unknown): Partial<AppNotification> | undefined {
+    if (!payload || typeof payload !== 'object') {
+      return undefined;
+    }
+    const candidate = payload as {
+      new?: Partial<AppNotification> | null;
+      record?: Partial<AppNotification> | null;
+    };
+    if (candidate.new && typeof candidate.new === 'object') {
+      return candidate.new;
+    }
+    if (candidate.record && typeof candidate.record === 'object') {
+      return candidate.record;
+    }
+    return payload as Partial<AppNotification>;
   }
 
   /**

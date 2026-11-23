@@ -52,9 +52,10 @@ export class AuditReportService {
       const records = (data as unknown as AuditRecord[]) ?? [];
       this._records.set(records);
       return records;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!this._error()) {
-        this._error.set(err?.message || 'Error inesperado al consultar registros de auditoría.');
+        const message = err instanceof Error ? err.message : '';
+        this._error.set(message || 'Error inesperado al consultar registros de auditoría.');
       }
       throw err;
     } finally {

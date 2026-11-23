@@ -47,10 +47,10 @@ export class PdfViewerComponent {
   @Input() header = 'Visor de Documentos';
 
   /** Whether the viewer requires mandatory reading acknowledgement. */
-  @Input() requiresAcknowledgement: boolean = false;
+  @Input() requiresAcknowledgement = false;
 
   /** Checkbox state for acknowledging document reading. */
-  @Input() acknowledgementChecked: boolean = false;
+  @Input() acknowledgementChecked = false;
 
   /** Emits when visibility changes (for two-way binding [(visible)]). */
   @Output() readonly visibleChange = new EventEmitter<boolean>();

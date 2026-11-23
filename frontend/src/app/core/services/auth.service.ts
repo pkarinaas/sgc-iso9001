@@ -2,7 +2,7 @@ import { inject, signal, computed, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import type { Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../supabase/supabase.client';
-import type { User } from '../models/user.model';
+import { extractRoleName, type RoleRelation, type User } from '../models/user.model';
 
 export interface SignInResult {
   session: Session | null;
@@ -148,9 +148,7 @@ export class AuthService {
         return null;
       }
 
-      const roleName = Array.isArray(data.roles)
-        ? data.roles[0]?.name
-        : (data.roles as any)?.name;
+      const roleName = extractRoleName(data.roles as RoleRelation);
 
       const roleStr = roleName ?? null;
       this._userRole.set(roleStr);
@@ -192,9 +190,7 @@ export class AuthService {
         return null;
       }
 
-      const roleName = Array.isArray(data.roles)
-        ? data.roles[0]?.name
-        : (data.roles as any)?.name;
+      const roleName = extractRoleName(data.roles as RoleRelation);
 
       if (roleName) {
         this._userRole.set(roleName);

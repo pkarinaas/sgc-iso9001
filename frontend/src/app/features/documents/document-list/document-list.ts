@@ -59,6 +59,19 @@ interface DateRangeFilter {
   end: Date | null;
 }
 
+export interface DocumentDateSource {
+  status?: DocumentStatus | string | null;
+  approved_at?: string | Date | null;
+  approvedAt?: string | Date | null;
+  updated_at?: string | Date | null;
+  updatedAt?: string | Date | null;
+}
+
+export interface FileSelectionEvent {
+  files?: File[] | FileList;
+  currentFiles?: File[];
+}
+
 /**
  * DocumentListComponent displays a filterable, paginated table of controlled
  * documents sourced from `public.documents` via `DocumentService`.
@@ -437,7 +450,7 @@ export class DocumentListComponent implements OnInit {
    * @param doc - The document object.
    * @returns Formatted date string in 'MM/YYYY' format or '-' if date is unavailable.
    */
-  getFormattedDocumentDate(doc: any): string {
+  getFormattedDocumentDate(doc: DocumentDateSource | null | undefined): string {
     if (!doc) return '-';
     const rawDate =
       doc.status === 'APPROVED'
@@ -529,7 +542,7 @@ export class DocumentListComponent implements OnInit {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Listado Maestro');
 
-    const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const excelBuffer: ArrayBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([excelBuffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
     });
@@ -719,9 +732,11 @@ export class DocumentListComponent implements OnInit {
    *
    * @param event - The selection event emitted by p-fileupload.
    */
-  onFileSelect(event: any): void {
+  onFileSelect(event: FileSelectionEvent | File | null | undefined): void {
     const file =
-      event?.files?.[0] ?? event?.currentFiles?.[0] ?? (event instanceof File ? event : null);
+      event instanceof File
+        ? event
+        : (event?.files?.[0] ?? event?.currentFiles?.[0] ?? null);
 
     if (file) {
       this.documentForm.patchValue({ file });

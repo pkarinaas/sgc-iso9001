@@ -29,6 +29,20 @@ export interface User {
   roles?: Role | null;
 }
 
+/** Joined role relation returned by Supabase PostgREST queries (object, array, or null). */
+export type RoleRelation = Pick<Role, 'name'> | Pick<Role, 'name'>[] | null | undefined;
+
+/**
+ * Extracts the role name from a Supabase joined `roles` relation whether
+ * returned as an object or a single-element array.
+ */
+export function extractRoleName(roles: RoleRelation): Role['name'] | null {
+  if (!roles) {
+    return null;
+  }
+  return Array.isArray(roles) ? (roles[0]?.name ?? null) : (roles.name ?? null);
+}
+
 /**
  * Payload for creating a new user.
  * `password` is required on creation but omitted on update flows.

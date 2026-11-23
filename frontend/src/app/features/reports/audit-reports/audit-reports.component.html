@@ -160,7 +160,7 @@
               <span class="doc-code">{{ record.doc_code }}</span>
               <span class="text-xs text-gray-600 font-medium">
                 {{ record.doc_title }}
-                @if (record.doc_version != null) {
+                @if (record.doc_version !== null && record.doc_version !== undefined) {
                   <span class="text-gray-400 font-mono">(v{{ record.doc_version }})</span>
                 }
               </span>

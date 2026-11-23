@@ -7,6 +7,7 @@ import { signal } from '@angular/core';
 import { AppLayoutComponent } from './app-layout.component';
 import { AuthService } from '../../services/auth.service';
 import { InactivityService } from '../../services/inactivity.service';
+import type { User } from '../../models/user.model';
 
 describe('AppLayoutComponent', () => {
   let fixture: ComponentFixture<AppLayoutComponent>;
@@ -16,7 +17,7 @@ describe('AppLayoutComponent', () => {
     getCurrentUserProfile: ReturnType<typeof vi.fn>;
     getUserRole: ReturnType<typeof vi.fn>;
     userRole: ReturnType<typeof signal<string | null>>;
-    currentUser: ReturnType<typeof signal<any>>;
+    currentUser: ReturnType<typeof signal<Partial<User> | null>>;
   };
   let warningSubject: BehaviorSubject<boolean>;
   let inactivityServiceMock: {
