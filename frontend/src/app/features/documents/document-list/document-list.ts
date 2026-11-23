@@ -47,6 +47,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { AuthService } from '../../../core/services/auth.service';
 import { DocumentService } from '../../../core/services/document.service';
+import { DocumentHistoryDrawerComponent } from '../document-history-drawer/document-history-drawer.component';
 import type {
   Document,
   DocumentStatus,
@@ -105,6 +106,7 @@ export interface FileSelectionEvent {
     Tooltip,
     SharedModule,
     NgxExtendedPdfViewerModule,
+    DocumentHistoryDrawerComponent,
   ],
   providers: [MessageService, ConfirmationService],
 })
@@ -983,6 +985,37 @@ export class DocumentListComponent implements OnInit {
   canViewActions(role: string = this.currentUserRole ?? ''): boolean {
     const activeRole = role || (this.currentUserRole ?? '');
     return activeRole !== 'VIEWER';
+  }
+
+  /** Controls visibility of the per-document ISO 9001 traceability drawer. */
+  isHistoryDrawerVisible = false;
+
+  /** Document currently displayed inside the traceability drawer. */
+  selectedHistoryDocument: Document | null = null;
+
+  /**
+   * Determines whether the given role can view document traceability history.
+   * Matches RLS `audit_logs_select_policy` ('ADMIN' and 'APPROVER').
+   */
+  canViewAuditHistory(role: string = this.currentUserRole ?? ''): boolean {
+    const activeRole = role || (this.currentUserRole ?? '');
+    return activeRole === 'ADMIN' || activeRole === 'APPROVER';
+  }
+
+  /** Opens the traceability history drawer for the selected document. */
+  openHistoryDrawer(doc: Document): void {
+    this.selectedHistoryDocument = doc;
+    this.isHistoryDrawerVisible = true;
+    this.cdr.markForCheck();
+  }
+
+  /** Syncs drawer visibility state and clears the active document when closed. */
+  onHistoryDrawerVisibleChange(visible: boolean): void {
+    this.isHistoryDrawerVisible = visible;
+    if (!visible) {
+      this.selectedHistoryDocument = null;
+    }
+    this.cdr.markForCheck();
   }
 
   /**

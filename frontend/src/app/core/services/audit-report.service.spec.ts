@@ -134,5 +134,142 @@ describe('AuditReportService', () => {
       expect(service.error()).toBe('Network failure');
     });
   });
+
+  describe('getDocumentHistory', () => {
+    it('should query audit_logs for documentId ordered newest first and normalize object and array relations', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const rawRows = [
+        {
+          id: 'log-2',
+          user_id: 'usr-2',
+          document_id: 15,
+          action: 'DOCUMENT_APPROVED',
+          details: { old_status: 'REVIEWED', new_status: 'APPROVED' },
+          created_at: '2026-11-20T14:00:00Z',
+          users: [{ full_name: 'Ana Gómez', email: 'ana@empresa.com' }],
+          documents: [{ code: 'POE-015', title: 'Control Interno', version: 2 }],
+        },
+        {
+          id: 'log-1',
+          user_id: null,
+          document_id: 15,
+          action: 'DRIVE_SYNC_SUCCESS',
+          details: { document_code: 'POE-015', document_title: 'Control Interno', document_version: 2 },
+          created_at: '2026-11-20T14:05:00Z',
+          users: null,
+          documents: null,
+        },
+      ];
+
+      const orderMock = vi.fn().mockResolvedValueOnce({ data: rawRows, error: null });
+      const eqMock = vi.fn().mockReturnValue({ order: orderMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+      const fromSpy = vi.spyOn(service.supabase, 'from').mockReturnValueOnce({
+        select: selectMock,
+      } as unknown as ReturnType<typeof service.supabase.from>);
+
+      const history = await service.getDocumentHistory(15);
+
+      expect(fromSpy).toHaveBeenCalledWith('audit_logs');
+      expect(eqMock).toHaveBeenCalledWith('document_id', 15);
+      expect(orderMock).toHaveBeenCalledWith('created_at', { ascending: false });
+      expect(history).toHaveLength(2);
+      expect(history[0]).toEqual(
+        expect.objectContaining({
+          id: 'log-2',
+          user_name: 'Ana Gómez',
+          user_email: 'ana@empresa.com',
+          doc_code: 'POE-015',
+          doc_title: 'Control Interno',
+          doc_version: 2,
+        }),
+      );
+      expect(history[1]).toEqual(
+        expect.objectContaining({
+          id: 'log-1',
+          user_name: null,
+          doc_code: 'POE-015',
+          doc_title: 'Control Interno',
+        }),
+      );
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should throw Spanish error when getDocumentHistory fails', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const orderMock = vi.fn().mockResolvedValueOnce({
+        data: null,
+        error: { message: 'permission denied for table audit_logs' },
+      });
+      const eqMock = vi.fn().mockReturnValue({ order: orderMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+      vi.spyOn(service.supabase, 'from').mockReturnValueOnce({
+        select: selectMock,
+      } as unknown as ReturnType<typeof service.supabase.from>);
+
+      await expect(service.getDocumentHistory(15)).rejects.toThrow(
+        'Error al obtener historial de trazabilidad: permission denied for table audit_logs',
+      );
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('getAuditLogs (SCRUM-104)', () => {
+    it('should query audit_logs with filters, update signals, and filter by document query', async () => {
+      const rawRows = [
+        {
+          id: 'log-a',
+          user_id: 'usr-1',
+          document_id: 1,
+          action: 'DOCUMENT_APPROVED',
+          details: { old_status: 'REVIEWED', new_status: 'APPROVED' },
+          created_at: '2026-11-20T11:00:00Z',
+          users: { full_name: 'Carlos Gómez', email: 'carlos@empresa.com' },
+          documents: { code: 'SGC-PR-001', title: 'Manual de Calidad', version: 1 },
+        },
+        {
+          id: 'log-b',
+          user_id: 'usr-1',
+          document_id: 2,
+          action: 'DOCUMENT_APPROVED',
+          details: { old_status: 'REVIEWED', new_status: 'APPROVED' },
+          created_at: '2026-11-20T09:00:00Z',
+          users: { full_name: 'Carlos Gómez', email: 'carlos@empresa.com' },
+          documents: { code: 'SGC-IT-099', title: 'Instructivo Auxiliar', version: 0 },
+        },
+      ];
+
+      const queryBuilder = {
+        select: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockResolvedValueOnce({ data: rawRows, error: null }),
+      };
+
+      const fromSpy = vi
+        .spyOn(service.supabase, 'from')
+        .mockReturnValueOnce(queryBuilder as unknown as ReturnType<typeof service.supabase.from>);
+
+      const logs = await service.getAuditLogs({
+        userId: 'usr-1',
+        action: 'DOCUMENT_APPROVED',
+        dateFrom: new Date('2026-11-20T00:00:00'),
+        dateTo: new Date('2026-11-20T23:59:59'),
+        documentQuery: 'manual',
+      });
+
+      expect(fromSpy).toHaveBeenCalledWith('audit_logs');
+      expect(queryBuilder.eq).toHaveBeenCalledWith('user_id', 'usr-1');
+      expect(queryBuilder.eq).toHaveBeenCalledWith('action', 'DOCUMENT_APPROVED');
+      expect(queryBuilder.gte).toHaveBeenCalledWith('created_at', expect.any(String));
+      expect(queryBuilder.lte).toHaveBeenCalledWith('created_at', expect.any(String));
+      expect(logs).toHaveLength(1);
+      expect(logs[0].doc_code).toBe('SGC-PR-001');
+      expect(service.auditLogs()).toEqual(logs);
+      expect(service.auditLogsLoading()).toBe(false);
+    });
+  });
 });
 
