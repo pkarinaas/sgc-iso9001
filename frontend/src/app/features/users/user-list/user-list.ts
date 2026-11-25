@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { Table, TableModule } from 'primeng/table';
@@ -14,7 +14,13 @@ import { PasswordModule } from 'primeng/password';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { UserService } from '../../../core/services/user.service';
-import type { Role, User } from '../../../core/models/user.model';
+import {
+  extractRoleIds,
+  extractRoleNames,
+  formatRoleLabel,
+  type Role,
+  type User,
+} from '../../../core/models/user.model';
 import { PROCESS_AREAS } from '../../../core/constants/process-area.constant';
 
 /** Severity levels accepted by PrimeNG's <p-tag> component. */
@@ -91,7 +97,7 @@ export class UserListComponent implements OnInit {
     full_name: ['', [Validators.required, Validators.minLength(3)]],
     email: ['', [Validators.required, Validators.email]],
     password: [''],
-    role_id: [null as number | null, Validators.required],
+    role_ids: [[] as number[], [Validators.required]],
     assigned_processes: [[] as string[], [Validators.required]],
   });
 
@@ -102,6 +108,19 @@ export class UserListComponent implements OnInit {
 
   /** Currently selected role filter option (null = show all). */
   selectedRole: string | null = null;
+
+  /** Reactive signal backing the role dropdown filter for multi-role matching. */
+  private readonly selectedRoleFilter = signal<string | null>(null);
+
+  /** Users filtered by the selected role across all roles assigned to each user. */
+  readonly filteredUsers = computed<User[]>(() => {
+    const users = this.userService.users();
+    const targetRole = this.selectedRoleFilter()?.trim().toUpperCase();
+    if (!targetRole) {
+      return users;
+    }
+    return users.filter((user) => this.getUserRoleNames(user).includes(targetRole));
+  });
 
   /** Currently selected status filter option (null = show all). */
   selectedStatus: boolean | null = null;
@@ -156,7 +175,7 @@ export class UserListComponent implements OnInit {
       full_name: '',
       email: '',
       password: '',
-      role_id: null,
+      role_ids: [],
       assigned_processes: [],
     });
     this.userForm.controls.email.enable();
@@ -190,7 +209,7 @@ export class UserListComponent implements OnInit {
     this.userForm.patchValue({
       full_name: user.full_name,
       email: user.email,
-      role_id: user.role_id,
+      role_ids: extractRoleIds(user),
       assigned_processes: user.assigned_processes ?? [],
     });
 
@@ -226,13 +245,13 @@ export class UserListComponent implements OnInit {
 
     this.isSaving.set(true);
 
-    const { full_name, email, password, role_id, assigned_processes } = this.userForm.getRawValue();
+    const { full_name, email, password, role_ids, assigned_processes } = this.userForm.getRawValue();
     let result: { error: string | null };
 
     if (this.isEditMode()) {
       result = await this.userService.updateUser(this.selectedUserId()!, {
         full_name,
-        role_id: role_id!,
+        role_ids: role_ids ?? [],
         assigned_processes: assigned_processes ?? [],
       });
     } else {
@@ -240,7 +259,7 @@ export class UserListComponent implements OnInit {
         email,
         password,
         full_name,
-        role_id: role_id!,
+        role_ids: role_ids ?? [],
         assigned_processes: assigned_processes ?? [],
       });
     }
@@ -276,14 +295,10 @@ export class UserListComponent implements OnInit {
     this.usersTable.filterGlobal(input.value, 'contains');
   }
 
-  /** Applies the role column filter when the dropdown selection changes. */
+  /** Applies the role filter when the dropdown selection changes. */
   onRoleFilterChange(value: string | null): void {
     this.selectedRole = value;
-    if (value) {
-      this.usersTable.filter(value, 'roles.name', 'equals');
-    } else {
-      this.usersTable.filter(null, 'roles.name', 'equals');
-    }
+    this.selectedRoleFilter.set(value);
   }
 
   /** Applies the status column filter when the dropdown selection changes. */
@@ -297,6 +312,11 @@ export class UserListComponent implements OnInit {
   }
 
   // Display helpers
+
+  /** Returns all normalized role codes assigned to a user in priority order. */
+  getUserRoleNames(user: User): string[] {
+    return extractRoleNames(user);
+  }
 
   /**
    * Returns the PrimeNG Tag severity for a given role name.
@@ -315,14 +335,7 @@ export class UserListComponent implements OnInit {
 
   /** Maps database role codes to their Spanish UI labels. */
   getRoleLabel(roleName: string | undefined): string {
-    const labels: Record<string, string> = {
-      ADMIN: 'Administrador',
-      APPROVER: 'Aprobador',
-      REVIEWER: 'Revisor',
-      EDITOR: 'Editor',
-      VIEWER: 'Lector',
-    };
-    return labels[roleName ?? ''] ?? roleName ?? '—';
+    return roleName ? formatRoleLabel(roleName) : '—';
   }
 
   /**

@@ -100,4 +100,83 @@ describe('UserService', () => {
     expect(profile?.roleNames).toEqual(['REVIEWER']);
     expect(profile?.roles?.name).toBe('REVIEWER');
   });
+
+  it('should update primary role_id on public.users and sync multiple roles in public.user_roles', async () => {
+    const rolesOrderSpy = vi.fn().mockResolvedValue({
+      data: [
+        { id: 1, name: 'ADMIN', description: null, created_at: '' },
+        { id: 3, name: 'REVIEWER', description: null, created_at: '' },
+        { id: 4, name: 'APPROVER', description: null, created_at: '' },
+      ],
+      error: null,
+    });
+    const usersUpdateEqSpy = vi.fn().mockResolvedValue({ error: null });
+    const usersUpdateSpy = vi.fn().mockReturnValue({ eq: usersUpdateEqSpy });
+    const userRolesUpsertSpy = vi.fn().mockResolvedValue({ error: null });
+    const userRolesNotSpy = vi.fn().mockResolvedValue({ error: null });
+    const userRolesDeleteEqSpy = vi.fn().mockReturnValue({ not: userRolesNotSpy });
+    const userRolesDeleteSpy = vi.fn().mockReturnValue({ eq: userRolesDeleteEqSpy });
+    const usersOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+
+    vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      if (table === 'roles') {
+        return { select: vi.fn().mockReturnValue({ order: rolesOrderSpy }) } as never;
+      }
+      if (table === 'users') {
+        return {
+          update: usersUpdateSpy,
+          select: vi.fn().mockReturnValue({ order: usersOrderSpy }),
+        } as never;
+      }
+      if (table === 'user_roles') {
+        return {
+          upsert: userRolesUpsertSpy,
+          delete: userRolesDeleteSpy,
+        } as never;
+      }
+      return {} as never;
+    });
+
+    await service.loadRoles();
+    const result = await service.updateUser('usr-2', {
+      full_name: 'María López',
+      role_ids: [3, 4],
+      assigned_processes: ['calidad'],
+    });
+
+    expect(result).toEqual({ error: null });
+    expect(usersUpdateSpy).toHaveBeenCalledWith({
+      full_name: 'María López',
+      role_id: 4,
+      assigned_processes: ['calidad'],
+    });
+    expect(usersUpdateEqSpy).toHaveBeenCalledWith('id', 'usr-2');
+    expect(userRolesUpsertSpy).toHaveBeenCalledWith(
+      [
+        { user_id: 'usr-2', role_id: 3 },
+        { user_id: 'usr-2', role_id: 4 },
+      ],
+      { onConflict: 'user_id,role_id', ignoreDuplicates: true },
+    );
+    expect(userRolesDeleteEqSpy).toHaveBeenCalledWith('user_id', 'usr-2');
+    expect(userRolesNotSpy).toHaveBeenCalledWith('role_id', 'in', '(3,4)');
+  });
+
+  it('should reject updateUser and createUser when role_ids is empty', async () => {
+    expect(
+      await service.updateUser('usr-1', {
+        full_name: 'Test',
+        role_ids: [],
+      }),
+    ).toEqual({ error: 'Debe seleccionar al menos un rol.' });
+
+    expect(
+      await service.createUser({
+        email: 'test@empresa.com',
+        password: 'password123',
+        full_name: 'Test',
+        role_ids: [],
+      }),
+    ).toEqual({ error: 'Debe seleccionar al menos un rol.' });
+  });
 });

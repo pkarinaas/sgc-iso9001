@@ -153,6 +153,46 @@ export function formatRoleLabel(roleName: string | null | undefined): string {
 }
 
 /**
+ * Extracts unique numeric role IDs from `user_roles` (falling back to
+ * legacy `role_id` or `roles.id` when `user_roles` is absent or empty).
+ */
+export function extractRoleIds(
+  user: Pick<User, 'user_roles' | 'role_id' | 'roles'> | null | undefined,
+): number[] {
+  if (!user) {
+    return [];
+  }
+
+  const uniqueIds = new Set<number>();
+
+  if (Array.isArray(user.user_roles)) {
+    for (const relation of user.user_roles) {
+      if (typeof relation?.role_id === 'number' && Number.isFinite(relation.role_id)) {
+        uniqueIds.add(relation.role_id);
+        continue;
+      }
+      const relRoles = relation?.roles;
+      const items = Array.isArray(relRoles) ? relRoles : relRoles ? [relRoles] : [];
+      for (const item of items) {
+        if (typeof item?.id === 'number' && Number.isFinite(item.id)) {
+          uniqueIds.add(item.id);
+        }
+      }
+    }
+  }
+
+  if (uniqueIds.size === 0) {
+    if (typeof user.role_id === 'number' && Number.isFinite(user.role_id)) {
+      uniqueIds.add(user.role_id);
+    } else if (typeof user.roles?.id === 'number' && Number.isFinite(user.roles.id)) {
+      uniqueIds.add(user.roles.id);
+    }
+  }
+
+  return Array.from(uniqueIds);
+}
+
+/**
  * Payload for creating a new user.
  * `password` is required on creation but omitted on update flows.
  */
@@ -160,7 +200,8 @@ export interface CreateUserPayload {
   email: string;
   password?: string;
   full_name: string;
-  role_id: number;
+  role_ids: number[];
+  role_id?: number;
   assigned_processes?: string[];
 }
 
@@ -169,6 +210,7 @@ export interface CreateUserPayload {
  */
 export interface UpdateUserPayload {
   full_name: string;
-  role_id: number;
+  role_ids: number[];
+  role_id?: number;
   assigned_processes?: string[];
 }

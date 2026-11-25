@@ -34,7 +34,7 @@
   <div class="user-list-table-card">
     <p-table
       #usersTable
-      [value]="userService.users()"
+      [value]="filteredUsers()"
       [loading]="userService.loading()"
       [paginator]="true"
       [rows]="10"
@@ -97,7 +97,7 @@
         <tr>
           <th pSortableColumn="full_name">Nombre Completo <p-sort-icon field="full_name" /></th>
           <th pSortableColumn="email">Correo Electrónico <p-sort-icon field="email" /></th>
-          <th>Rol</th>
+          <th>Roles</th>
           <th>Estado</th>
           <th pSortableColumn="created_at">Fecha de Alta <p-sort-icon field="created_at" /></th>
           <th class="col-actions">Acciones</th>
@@ -113,11 +113,17 @@
           <!-- Email -->
           <td>{{ user.email }}</td>
 
-          <!-- Role tag -->
+          <!-- Role tags -->
           <td>
-            <span class="sgc-badge" [attr.data-role]="user.roles?.name">
-              {{ getRoleLabel(user.roles?.name) }}
-            </span>
+            <div class="user-roles-cell">
+              @for (roleName of getUserRoleNames(user); track roleName) {
+                <span class="sgc-badge" [attr.data-role]="roleName">
+                  {{ getRoleLabel(roleName) }}
+                </span>
+              } @empty {
+                <span class="sgc-badge">—</span>
+              }
+            </div>
           </td>
 
           <!-- Status tag -->
@@ -301,24 +307,27 @@
       </div>
     }
 
-    <!-- Role -->
+    <!-- Roles -->
     <div class="user-form-field">
-      <label for="select-role" class="user-form-label">
-        Rol <span class="required-mark">*</span>
+      <label for="select-roles" class="user-form-label">
+        Roles <span class="required-mark">*</span>
       </label>
       <p-select
-        formControlName="role_id"
+        id="select-roles-control"
+        inputId="select-roles"
+        formControlName="role_ids"
         [options]="formRoleOptions"
         optionLabel="label"
         optionValue="value"
+        [multiple]="true"
         appendTo="body"
-        placeholder="Seleccionar rol"
-        class="w-full"
-        [class.ng-invalid]="userForm.controls.role_id.invalid && userForm.controls.role_id.touched"
+        placeholder="Seleccione uno o más roles"
+        class="w-full user-roles-select"
+        [class.ng-invalid]="userForm.controls.role_ids.invalid && userForm.controls.role_ids.touched"
       ></p-select>
 
-      @if (userForm.controls.role_id.invalid && userForm.controls.role_id.touched) {
-        <small class="user-form-error">Seleccione un rol.</small>
+      @if (userForm.controls.role_ids.invalid && userForm.controls.role_ids.touched) {
+        <small class="user-form-error">Debe seleccionar al menos un rol.</small>
       }
     </div>
 
