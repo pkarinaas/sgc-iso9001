@@ -15,7 +15,7 @@ import { Tooltip } from 'primeng/tooltip';
 import { PopoverModule } from 'primeng/popover';
 import { AuthService } from '../../services/auth.service';
 import { NotificationService, type AppNotification } from '../../services/notification.service';
-import { extractRoleName, type User } from '../../models/user.model';
+import { extractRoleNames, formatRoleLabel, type User } from '../../models/user.model';
 
 /**
  * TopbarComponent provides the global header bar for authenticated views.
@@ -72,15 +72,39 @@ export class TopbarComponent implements OnInit {
     return user?.full_name?.trim() || 'Usuario';
   });
 
-  /** Derived Spanish label for the current user's role. */
-  readonly userRole = computed(() => {
-    const user = this.currentUser();
-    const rawRole =
-      extractRoleName(user?.roles) ??
-      (typeof this.authService.userRole === 'function' ? this.authService.userRole() : null);
+  /** Derived priority-sorted role codes assigned to the current user. */
+  readonly userRoleCodes = computed(() => {
+    const profileRoles = extractRoleNames(this.currentUser());
+    if (profileRoles.length > 0) {
+      return profileRoles;
+    }
 
-    return this.getRoleLabel(rawRole);
+    if (typeof this.authService.userRoles === 'function' && this.authService.userRoles().length > 0) {
+      return this.authService.userRoles();
+    }
+
+    const legacyRole =
+      typeof this.authService.userRole === 'function' ? this.authService.userRole() : null;
+    return legacyRole ? [legacyRole] : [];
   });
+
+  /** Derived Spanish labels for all roles assigned to the current user. */
+  readonly userRoleLabels = computed(() =>
+    this.userRoleCodes().map((role) => this.getRoleLabel(role)),
+  );
+
+  /** Derived Spanish label for the current user's primary role. */
+  readonly userRole = computed(() => this.userRoleLabels()[0] ?? 'Usuario');
+
+  /** Number of additional assigned roles beyond the primary display pill. */
+  readonly extraRolesCount = computed(() => Math.max(0, this.userRoleLabels().length - 1));
+
+  /** Tooltip listing all assigned roles in Spanish when the user holds multiple roles. */
+  readonly allRolesTooltip = computed(() =>
+    this.userRoleLabels().length > 1
+      ? `Roles asignados: ${this.userRoleLabels().join(', ')}`
+      : '',
+  );
 
   async ngOnInit(): Promise<void> {
     await this.loadUserData();
@@ -123,14 +147,7 @@ export class TopbarComponent implements OnInit {
    * @returns Spanish display label.
    */
   getRoleLabel(roleName: string | undefined | null): string {
-    const labels: Record<string, string> = {
-      ADMIN: 'Administrador',
-      APPROVER: 'Aprobador',
-      REVIEWER: 'Revisor',
-      EDITOR: 'Editor',
-      VIEWER: 'Lector',
-    };
-    return labels[roleName ?? ''] ?? roleName ?? 'Usuario';
+    return formatRoleLabel(roleName);
   }
 
   /**

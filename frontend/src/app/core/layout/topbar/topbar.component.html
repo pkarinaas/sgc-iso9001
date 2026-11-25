@@ -131,7 +131,20 @@
         <span class="user-profile-text">
           <span class="user-name">{{ userName() }}</span>
           <span class="user-separator">|</span>
-          <span class="user-role">{{ userRole() }}</span>
+          <span class="user-roles-group">
+            <span class="user-role">{{ userRole() }}</span>
+            @if (extraRolesCount() > 0) {
+              <span
+                id="user-role-extra-badge"
+                class="user-role-extra"
+                [pTooltip]="allRolesTooltip()"
+                tooltipPosition="bottom"
+                [attr.aria-label]="allRolesTooltip()"
+              >
+                +{{ extraRolesCount() }}
+              </span>
+            }
+          </span>
         </span>
       </div>
     </div>

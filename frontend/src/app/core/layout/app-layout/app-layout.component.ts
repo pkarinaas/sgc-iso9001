@@ -7,6 +7,7 @@ import { Subscription } from 'rxjs';
 import { TopbarComponent } from '../topbar/topbar.component';
 import { AuthService } from '../../services/auth.service';
 import { InactivityService } from '../../services/inactivity.service';
+import { extractRoleNames } from '../../models/user.model';
 
 /**
  * AppLayoutComponent serves as the primary application layout for authenticated views.
@@ -46,22 +47,25 @@ export class AppLayoutComponent implements OnInit, OnDestroy {
   /** Signal reflecting whether the warning dialog is currently visible. */
   readonly isWarningVisible = signal(false);
 
-  /** Signal holding the current user's role code. */
-  readonly userRole = signal<string | null>(null);
+  /** Signal holding all active role codes assigned to the current user. */
+  readonly userRoles = signal<string[]>([]);
 
   /**
-   * Indicates whether the currently authenticated user is an Administrator.
+   * Indicates whether the currently authenticated user holds the Administrator role.
    * Restricts sensitive navigation elements such as the "Usuarios" view.
    */
   get isAdmin(): boolean {
-    const role =
-      this.userRole() ??
-      (typeof this.authService.userRole === 'function' ? this.authService.userRole() : null) ??
-      (typeof this.authService.currentUser === 'function'
-        ? this.authService.currentUser()?.roles?.name
-        : null);
+    if (this.userRoles().length > 0) {
+      return this.userRoles().includes('ADMIN');
+    }
 
-    return role?.toUpperCase() === 'ADMIN';
+    if (typeof this.authService.hasRole === 'function') {
+      return this.authService.hasRole('ADMIN');
+    }
+
+    const current =
+      typeof this.authService.currentUser === 'function' ? this.authService.currentUser() : null;
+    return extractRoleNames(current).includes('ADMIN');
   }
 
   async ngOnInit(): Promise<void> {
@@ -75,11 +79,23 @@ export class AppLayoutComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Retrieves the current user's role from AuthService.
+   * Retrieves the current user's roles from AuthService.
    */
   async loadUserRole(): Promise<void> {
-    if (typeof this.authService.userRole === 'function' && this.authService.userRole()) {
-      this.userRole.set(this.authService.userRole());
+    if (typeof this.authService.userRoles === 'function' && this.authService.userRoles().length > 0) {
+      this.userRoles.set(this.authService.userRoles());
+      return;
+    }
+
+    if (typeof this.authService.getUserRoles === 'function') {
+      try {
+        const roles = await this.authService.getUserRoles();
+        if (roles.length > 0) {
+          this.userRoles.set(roles);
+        }
+      } catch (error) {
+        console.error('Error fetching user roles in AppLayoutComponent:', error);
+      }
       return;
     }
 
@@ -87,7 +103,7 @@ export class AppLayoutComponent implements OnInit, OnDestroy {
       try {
         const role = await this.authService.getUserRole();
         if (role) {
-          this.userRole.set(role);
+          this.userRoles.set([role]);
         }
       } catch (error) {
         console.error('Error fetching user role in AppLayoutComponent:', error);

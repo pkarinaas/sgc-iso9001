@@ -28,6 +28,7 @@ describe('TopbarComponent', () => {
 
   let authServiceMock: {
     getCurrentUserProfile: ReturnType<typeof vi.fn>;
+    userRoles: ReturnType<typeof signal<string[]>>;
     userRole: ReturnType<typeof signal<string | null>>;
     currentUser: ReturnType<typeof signal<User | null>>;
   };
@@ -69,6 +70,7 @@ describe('TopbarComponent', () => {
   beforeEach(async () => {
     authServiceMock = {
       getCurrentUserProfile: vi.fn().mockResolvedValue({ ...mockUser }),
+      userRoles: signal(['ADMIN']),
       userRole: signal('ADMIN'),
       currentUser: signal({ ...mockUser }),
     };
@@ -135,6 +137,7 @@ describe('TopbarComponent', () => {
 
     it('should fallback gracefully to "Usuario" when no user profile is available', async () => {
       authServiceMock.currentUser.set(null);
+      authServiceMock.userRoles.set([]);
       authServiceMock.userRole.set(null);
       authServiceMock.getCurrentUserProfile.mockResolvedValueOnce(null);
       component.currentUser.set(null);
@@ -142,10 +145,34 @@ describe('TopbarComponent', () => {
 
       expect(component.userName()).toBe('Usuario');
       expect(component.userRole()).toBe('Usuario');
+      expect(component.extraRolesCount()).toBe(0);
 
       const compiled = fixture.nativeElement as HTMLElement;
       const profileText = compiled.querySelector('.user-profile-text');
       expect(profileText?.textContent).toContain('Usuario');
+      expect(compiled.querySelector('#user-role-extra-badge')).toBeNull();
+    });
+
+    it('should render primary role pill plus +N badge with Spanish tooltip when user holds multiple roles', () => {
+      component.currentUser.set({
+        ...mockUser,
+        user_roles: [
+          { role_id: 3, roles: { id: 3, name: 'REVIEWER' } },
+          { role_id: 4, roles: { id: 4, name: 'APPROVER' } },
+        ],
+      });
+      fixture.detectChanges();
+
+      expect(component.userRole()).toBe('Aprobador');
+      expect(component.userRoleLabels()).toEqual(['Aprobador', 'Revisor']);
+      expect(component.extraRolesCount()).toBe(1);
+      expect(component.allRolesTooltip()).toBe('Roles asignados: Aprobador, Revisor');
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('.user-role')?.textContent?.trim()).toBe('Aprobador');
+      const extraBadge = compiled.querySelector('#user-role-extra-badge');
+      expect(extraBadge?.textContent?.trim()).toBe('+1');
+      expect(extraBadge?.getAttribute('aria-label')).toBe('Roles asignados: Aprobador, Revisor');
     });
   });
 

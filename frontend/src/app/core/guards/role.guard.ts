@@ -1,18 +1,16 @@
 import { inject } from '@angular/core';
-import { Router, type CanActivateFn } from '@angular/router';
+import { ActivatedRouteSnapshot, Router, type CanActivateFn } from '@angular/router';
 import { AuthService } from '../services/auth.service';
-import { supabase } from '../supabase/supabase.client';
 
 /**
- * Functional guard that ensures the authenticated user has the ADMIN role
- * and an active account in public.users before granting access to protected routes.
+ * Functional guard that ensures the authenticated user has at least one allowed role
+ * (defaults to `['ADMIN']` when `route.data['roles']` is omitted) and an active account
+ * in `public.users` before granting access to protected routes.
  *
  * If unauthenticated, redirects to /login.
- * If unauthorized (inactive or non-ADMIN role), redirects to /dashboard.
- *
- * The guard awaits `waitForInitialization()` to prevent race conditions on page reload (F5).
+ * If unauthorized (inactive or missing any required role), redirects to /dashboard.
  */
-export const roleGuard: CanActivateFn = async () => {
+export const roleGuard: CanActivateFn = async (route: ActivatedRouteSnapshot) => {
   const authService = inject(AuthService);
   const router = inject(Router);
 
@@ -24,16 +22,12 @@ export const roleGuard: CanActivateFn = async () => {
     return router.createUrlTree(['/login']);
   }
 
-  // Fetch the user's active status and joined role name from Supabase.
-  const { data, error } = await supabase
-    .from('users')
-    .select('is_active, roles!inner(name)')
-    .eq('id', session.user.id)
-    .single();
+  const routeRoles = route?.data?.['roles'];
+  const allowedRoles =
+    Array.isArray(routeRoles) && routeRoles.length > 0 ? (routeRoles as string[]) : ['ADMIN'];
 
-  const role = Array.isArray(data?.roles) ? data.roles[0] : data?.roles;
-
-  if (error || !data || data.is_active !== true || role?.name !== 'ADMIN') {
+  const profile = await authService.getCurrentUserProfile();
+  if (!profile || profile.is_active !== true || !authService.hasAnyRole(allowedRoles)) {
     return router.createUrlTree(['/dashboard']);
   }
 

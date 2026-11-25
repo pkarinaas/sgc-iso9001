@@ -15,7 +15,10 @@ describe('AppLayoutComponent', () => {
   let authServiceMock: {
     signOut: ReturnType<typeof vi.fn>;
     getCurrentUserProfile: ReturnType<typeof vi.fn>;
+    getUserRoles: ReturnType<typeof vi.fn>;
     getUserRole: ReturnType<typeof vi.fn>;
+    hasRole: ReturnType<typeof vi.fn>;
+    userRoles: ReturnType<typeof signal<string[]>>;
     userRole: ReturnType<typeof signal<string | null>>;
     currentUser: ReturnType<typeof signal<Partial<User> | null>>;
   };
@@ -30,16 +33,22 @@ describe('AppLayoutComponent', () => {
   beforeEach(async () => {
     warningSubject = new BehaviorSubject<boolean>(false);
 
+    const userRolesSignal = signal<string[]>(['ADMIN']);
     authServiceMock = {
       signOut: vi.fn().mockResolvedValue(undefined),
+      getUserRoles: vi.fn().mockResolvedValue(['ADMIN']),
       getUserRole: vi.fn().mockResolvedValue('ADMIN'),
+      hasRole: vi.fn((role: string) => userRolesSignal().includes(role.toUpperCase())),
       getCurrentUserProfile: vi.fn().mockResolvedValue({
         id: 'usr-123',
         full_name: 'Juan Pérez',
         email: 'juan@empresa.com',
         role_id: 1,
         roles: { id: 1, name: 'ADMIN', description: 'Administrador', created_at: '' },
+        user_roles: [{ role_id: 1, roles: { id: 1, name: 'ADMIN' } }],
+        roleNames: ['ADMIN'],
       }),
+      userRoles: userRolesSignal,
       userRole: signal('ADMIN'),
       currentUser: signal({
         id: 'usr-123',
@@ -47,6 +56,8 @@ describe('AppLayoutComponent', () => {
         email: 'juan@empresa.com',
         role_id: 1,
         roles: { id: 1, name: 'ADMIN', description: 'Administrador', created_at: '' },
+        user_roles: [{ role_id: 1, roles: { id: 1, name: 'ADMIN' } }],
+        roleNames: ['ADMIN'],
       }),
     };
 
@@ -224,6 +235,7 @@ describe('AppLayoutComponent', () => {
     });
 
     it('should hide the "Usuarios" menu link when the user is not an Admin (e.g. VIEWER)', async () => {
+      authServiceMock.userRoles.set(['VIEWER']);
       authServiceMock.userRole.set('VIEWER');
       authServiceMock.currentUser.set({
         id: 'usr-999',
@@ -231,8 +243,9 @@ describe('AppLayoutComponent', () => {
         email: 'lector@empresa.com',
         role_id: 5,
         roles: { id: 5, name: 'VIEWER', description: 'Lector', created_at: '' },
+        roleNames: ['VIEWER'],
       });
-      component.userRole.set('VIEWER');
+      component.userRoles.set(['VIEWER']);
       fixture.detectChanges();
 
       expect(component.isAdmin).toBe(false);
@@ -246,6 +259,18 @@ describe('AppLayoutComponent', () => {
       expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/dashboard')).toBe(true);
       expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/documents')).toBe(true);
       expect(Array.from(links).some((l) => l.getAttribute('routerLink') === '/reportes')).toBe(true);
+    });
+
+    it('should show "Usuarios" for multi-role user containing ADMIN and hide it for non-ADMIN multi-role user', () => {
+      component.userRoles.set(['REVIEWER', 'ADMIN']);
+      fixture.detectChanges();
+      expect(component.isAdmin).toBe(true);
+      expect(fixture.nativeElement.querySelector('aside nav a[routerLink="/users"]')).toBeTruthy();
+
+      component.userRoles.set(['REVIEWER', 'APPROVER']);
+      fixture.detectChanges();
+      expect(component.isAdmin).toBe(false);
+      expect(fixture.nativeElement.querySelector('aside nav a[routerLink="/users"]')).toBeNull();
     });
   });
 });

@@ -519,6 +519,40 @@ describe('DashboardComponent', () => {
       expect(traceabilityCard?.textContent).toContain('Pendiente de Lectura');
     });
 
+    it('should grant Admin analytics access for multi-role users holding ADMIN and deny it for non-ADMIN multi-role users', async () => {
+      mockDashboardService.getDashboardMetrics.mockClear();
+      mockAuthService.getCurrentUserProfile.mockResolvedValueOnce({
+        ...mockUser,
+        user_roles: [
+          { role_id: 3, roles: { id: 3, name: 'REVIEWER' } },
+          { role_id: 1, roles: { id: 1, name: 'ADMIN' } },
+        ],
+      });
+
+      await component.loadPendingDocuments();
+      fixture.detectChanges();
+
+      expect(component.isAdmin).toBe(true);
+      expect(mockDashboardService.getDashboardMetrics).toHaveBeenCalledTimes(1);
+      expect(fixture.nativeElement.querySelector('#dashboard-analytics-section')).not.toBeNull();
+
+      mockDashboardService.getDashboardMetrics.mockClear();
+      mockAuthService.getCurrentUserProfile.mockResolvedValueOnce({
+        ...mockUser,
+        user_roles: [
+          { role_id: 3, roles: { id: 3, name: 'REVIEWER' } },
+          { role_id: 4, roles: { id: 4, name: 'APPROVER' } },
+        ],
+      });
+
+      await component.loadPendingDocuments();
+      fixture.detectChanges();
+
+      expect(component.isAdmin).toBe(false);
+      expect(mockDashboardService.getDashboardMetrics).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.querySelector('#dashboard-analytics-section')).toBeNull();
+    });
+
     it('should map documentsByStatus to Chart.js data format in strict chronological lifecycle order with fallback to 0', () => {
       // Input in arbitrary order with missing statuses (DRAFT and REVIEWED absent)
       component.setupChartData({

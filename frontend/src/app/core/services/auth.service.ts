@@ -2,7 +2,12 @@ import { inject, signal, computed, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import type { Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../supabase/supabase.client';
-import { extractRoleName, type RoleRelation, type User } from '../models/user.model';
+import {
+  extractRoleNames,
+  type Role,
+  type User,
+  type UserRoleRelation,
+} from '../models/user.model';
 
 export interface SignInResult {
   session: Session | null;
@@ -44,11 +49,14 @@ export class AuthService {
   /** Derived boolean Signal: true when the user has an active session. */
   readonly isAuthenticated = computed(() => this._session() !== null);
 
-  /** Writable signal holding the current user's role name. */
-  private readonly _userRole = signal<string | null>(null);
+  /** Writable signal holding all active role names assigned to the current user. */
+  private readonly _userRoles = signal<string[]>([]);
 
-  /** Public read-only view of the current user's role. */
-  readonly userRole = this._userRole.asReadonly();
+  /** Public read-only view of all role names assigned to the current user. */
+  readonly userRoles = this._userRoles.asReadonly();
+
+  /** Public read-only view of the user's highest-priority role (backward compatibility). */
+  readonly userRole = computed<string | null>(() => this._userRoles()[0] ?? null);
 
   /** Writable signal holding the current user profile data. */
   private readonly _currentUser = signal<User | null>(null);
@@ -79,7 +87,7 @@ export class AuthService {
     supabase.auth.onAuthStateChange((_event, session) => {
       this._session.set(session);
       if (!session) {
-        this._userRole.set(null);
+        this._userRoles.set([]);
         this._currentUser.set(null);
       }
       this._initialized.set(true);
@@ -113,55 +121,111 @@ export class AuthService {
       email,
       password,
     });
-    // Update the session signal immediately so the rest of the app
-    // reflects the authenticated state before the caller continues.
+    // Reset cached profile/roles and update the session signal immediately so the rest
+    // of the app reflects the newly authenticated state before the caller continues.
+    this._userRoles.set([]);
+    this._currentUser.set(null);
     this._session.set(data.session);
     return { session: data.session, error };
   }
 
   /**
-   * Retrieves the current user's role from the public.users table.
-   * Caches the value in the `_userRole` signal.
-   *
-   * @returns The role name ('ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER', 'VIEWER') or null.
+   * Returns `true` if the current authenticated user holds the specified role.
    */
-  async getUserRole(): Promise<string | null> {
-    if (this._userRole()) {
-      return this._userRole();
+  hasRole(role: string): boolean {
+    const normalized = role.trim().toUpperCase();
+    if (!normalized) {
+      return false;
+    }
+    return this._userRoles().includes(normalized);
+  }
+
+  /**
+   * Returns `true` if the current authenticated user holds at least one of the specified roles.
+   */
+  hasAnyRole(roles: readonly string[]): boolean {
+    return roles.some((role) => this.hasRole(role));
+  }
+
+  private async fetchUserRolesRelations(userId: string): Promise<UserRoleRelation[]> {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role_id, roles(id, name)')
+      .eq('user_id', userId);
+
+    if (error || !Array.isArray(data)) {
+      return [];
+    }
+    return data as unknown as UserRoleRelation[];
+  }
+
+  private async fetchLegacyRoleById(roleId: number): Promise<Role | null> {
+    const { data, error } = await supabase
+      .from('roles')
+      .select('id, name, description, created_at')
+      .eq('id', roleId)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+    return data as unknown as Role;
+  }
+
+  /**
+   * Retrieves all active role names assigned to the current user from `public.user_roles`
+   * (with fallback to legacy `public.users.role_id` -> `public.roles`), caching them in `_userRoles`.
+   */
+  async getUserRoles(): Promise<string[]> {
+    if (this._userRoles().length > 0) {
+      return this._userRoles();
     }
     await this.waitForInitialization();
     const session = this._session();
     if (!session) {
-      this._userRole.set(null);
-      return null;
+      this._userRoles.set([]);
+      return [];
     }
 
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('roles(name)')
-        .eq('id', session.user.id)
-        .single();
+      const userRoles = await this.fetchUserRolesRelations(session.user.id);
+      let roleNames = extractRoleNames({ user_roles: userRoles });
 
-      if (error || !data) {
-        this._userRole.set(null);
-        return null;
+      if (roleNames.length === 0) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role_id')
+          .eq('id', session.user.id)
+          .single();
+
+        if (userData?.role_id !== null && userData?.role_id !== undefined) {
+          const legacyRole = await this.fetchLegacyRoleById(Number(userData.role_id));
+          roleNames = extractRoleNames({ roles: legacyRole });
+        }
       }
 
-      const roleName = extractRoleName(data.roles as RoleRelation);
-
-      const roleStr = roleName ?? null;
-      this._userRole.set(roleStr);
-      return roleStr;
+      this._userRoles.set(roleNames);
+      return roleNames;
     } catch {
-      this._userRole.set(null);
-      return null;
+      this._userRoles.set([]);
+      return [];
     }
   }
 
   /**
-   * Retrieves the current user's profile from public.users including assigned_processes.
-   * Caches the value in the `_currentUser` signal.
+   * Retrieves the current user's highest-priority role name for backward compatibility.
+   *
+   * @returns The primary role name ('ADMIN', 'APPROVER', 'REVIEWER', 'EDITOR', 'VIEWER') or null.
+   */
+  async getUserRole(): Promise<string | null> {
+    const roles = await this.getUserRoles();
+    return roles[0] ?? null;
+  }
+
+  /**
+   * Retrieves the current user's profile from `public.users` and assigned roles from
+   * `public.user_roles` using separate queries to avoid PostgREST embed ambiguity,
+   * caching the result in `_currentUser` and `_userRoles`.
    *
    * @returns The User object or null if unauthenticated or not found.
    */
@@ -173,34 +237,48 @@ export class AuthService {
     const session = this._session();
     if (!session?.user) {
       this._currentUser.set(null);
+      this._userRoles.set([]);
       return null;
     }
 
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select(
-          'id, email, full_name, role_id, is_active, created_at, assigned_processes, roles(id, name, description)',
-        )
-        .eq('id', session.user.id)
-        .single();
+      const [userResult, userRoles] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, email, full_name, role_id, is_active, created_at, assigned_processes')
+          .eq('id', session.user.id)
+          .single(),
+        this.fetchUserRolesRelations(session.user.id),
+      ]);
 
-      if (error || !data) {
+      if (userResult.error || !userResult.data) {
         this._currentUser.set(null);
+        this._userRoles.set([]);
         return null;
       }
 
-      const roleName = extractRoleName(data.roles as RoleRelation);
+      const rawUser = userResult.data as unknown as User;
+      let legacyRole: Role | null = null;
+      let roleNames = extractRoleNames({ user_roles: userRoles });
 
-      if (roleName) {
-        this._userRole.set(roleName);
+      if (roleNames.length === 0 && rawUser.role_id !== null && rawUser.role_id !== undefined) {
+        legacyRole = await this.fetchLegacyRoleById(rawUser.role_id);
+        roleNames = extractRoleNames({ roles: legacyRole });
       }
 
-      const profile = data as unknown as User;
+      this._userRoles.set(roleNames);
+
+      const profile: User = {
+        ...rawUser,
+        roles: legacyRole,
+        user_roles: userRoles,
+        roleNames,
+      };
       this._currentUser.set(profile);
       return profile;
     } catch {
       this._currentUser.set(null);
+      this._userRoles.set([]);
       return null;
     }
   }
@@ -209,7 +287,7 @@ export class AuthService {
   async signOut(): Promise<void> {
     await supabase.auth.signOut();
     this._session.set(null);
-    this._userRole.set(null);
+    this._userRoles.set([]);
     this._currentUser.set(null);
     await this.router.navigate(['/login']);
   }
