@@ -114,15 +114,34 @@ export class DocumentListComponent implements OnInit {
   readonly authService = inject(AuthService);
   readonly documentService = inject(DocumentService);
 
-  private readonly _currentUserRole = signal<string | null>(null);
+  private readonly _currentUserRoles = signal<string[] | null>(null);
 
-  /** Current role of the authenticated user (e.g. 'ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER', 'VIEWER'). */
+  /** All active role names assigned to the authenticated user. */
+  get currentUserRoles(): string[] {
+    const local = this._currentUserRoles();
+    if (local !== null) {
+      return local;
+    }
+    if (typeof this.authService.userRoles === 'function') {
+      return this.authService.userRoles();
+    }
+    return [];
+  }
+
+  set currentUserRoles(value: string[]) {
+    this._currentUserRoles.set(
+      value.map((role) => role.trim().toUpperCase()).filter((role) => role.length > 0),
+    );
+  }
+
+  /** Highest-priority role of the authenticated user (backward compatibility). */
   get currentUserRole(): string | null {
-    return this._currentUserRole();
+    return this.currentUserRoles[0] ?? null;
   }
 
   set currentUserRole(value: string | null) {
-    this._currentUserRole.set(value);
+    const normalized = value?.trim().toUpperCase();
+    this._currentUserRoles.set(normalized ? [normalized] : []);
   }
   private readonly filterService = inject(FilterService);
   private readonly messageService = inject(MessageService);
@@ -371,7 +390,12 @@ export class DocumentListComponent implements OnInit {
       fileChosenMessage: '{0} archivos seleccionados',
       fileSizeTypes: ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
     });
-    this.currentUserRole = await this.authService.getUserRole();
+    if (typeof this.authService.getUserRoles === 'function') {
+      this.currentUserRoles = await this.authService.getUserRoles();
+    } else {
+      const legacyRole = await this.authService.getUserRole();
+      this.currentUserRoles = legacyRole ? [legacyRole] : [];
+    }
     await this.documentService.loadDocuments();
     this.resumePendingDriveSyncPolling();
   }
@@ -968,23 +992,40 @@ export class DocumentListComponent implements OnInit {
 
   // Role-based action helpers
 
-  /**
-   * Indicates whether the currently authenticated user has the 'ADMIN' role.
-   */
-  get isAdmin(): boolean {
-    return this.currentUserRole === 'ADMIN';
+  private resolveRoles(role?: string | readonly string[]): string[] {
+    if (Array.isArray(role)) {
+      return role.map((item) => item.trim().toUpperCase()).filter((item) => item.length > 0);
+    }
+    if (typeof role === 'string') {
+      const normalized = role.trim().toUpperCase();
+      if (normalized) {
+        return [normalized];
+      }
+    }
+    return this.currentUserRoles;
+  }
+
+  private hasAnyActiveRole(
+    allowedRoles: readonly string[],
+    role?: string | readonly string[],
+  ): boolean {
+    const roles = this.resolveRoles(role);
+    return allowedRoles.some((allowed) => roles.includes(allowed));
   }
 
   /**
-   * Determines whether management actions should be visible for the given role.
-   * Returns false if the role is 'VIEWER'.
-   *
-   * @param role - Optional role to check (defaults to current user's role).
-   * @returns `false` if role is 'VIEWER', otherwise `true`.
+   * Indicates whether the currently authenticated user holds the 'ADMIN' role.
    */
-  canViewActions(role: string = this.currentUserRole ?? ''): boolean {
-    const activeRole = role || (this.currentUserRole ?? '');
-    return activeRole !== 'VIEWER';
+  get isAdmin(): boolean {
+    return this.hasAnyActiveRole(['ADMIN']);
+  }
+
+  /**
+   * Determines whether management actions should be visible for the given role(s).
+   * Returns true if at least one active role is ADMIN, EDITOR, REVIEWER, or APPROVER.
+   */
+  canViewActions(role?: string | readonly string[]): boolean {
+    return this.hasAnyActiveRole(['ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER'], role);
   }
 
   /** Controls visibility of the per-document ISO 9001 traceability drawer. */
@@ -994,12 +1035,11 @@ export class DocumentListComponent implements OnInit {
   selectedHistoryDocument: Document | null = null;
 
   /**
-   * Determines whether the given role can view document traceability history.
+   * Determines whether the active role(s) can view document traceability history.
    * Matches RLS `audit_logs_select_policy` ('ADMIN' and 'APPROVER').
    */
-  canViewAuditHistory(role: string = this.currentUserRole ?? ''): boolean {
-    const activeRole = role || (this.currentUserRole ?? '');
-    return activeRole === 'ADMIN' || activeRole === 'APPROVER';
+  canViewAuditHistory(role?: string | readonly string[]): boolean {
+    return this.hasAnyActiveRole(['ADMIN', 'APPROVER'], role);
   }
 
   /** Opens the traceability history drawer for the selected document. */
@@ -1021,67 +1061,53 @@ export class DocumentListComponent implements OnInit {
   /**
    * Determines whether the given document can be deleted.
    * Business rule: only 'DRAFT' and 'REVIEWED' documents can be deleted,
-   * and users with 'VIEWER' role cannot delete any document.
-   *
-   * @param doc - The document to evaluate.
-   * @param role - Optional role to evaluate against (defaults to current user's role).
-   * @returns `true` if the document is in 'DRAFT' or 'REVIEWED' state and role is not 'VIEWER', otherwise `false`.
+   * and at least one role other than 'VIEWER' must be present.
    */
-  canDelete(doc: Document, role: string = this.currentUserRole ?? ''): boolean {
-    const activeRole = role || (this.currentUserRole ?? '');
-    if (activeRole === 'VIEWER') {
+  canDelete(doc: Document, role?: string | readonly string[]): boolean {
+    if (doc.status !== 'DRAFT' && doc.status !== 'REVIEWED') {
       return false;
     }
-    return doc.status === 'DRAFT' || doc.status === 'REVIEWED';
+    return this.hasAnyActiveRole(['ADMIN', 'EDITOR', 'REVIEWER', 'APPROVER'], role);
   }
 
   /**
-   * Determines whether the user has permissions to transition a document's status.
-   *
-   * Role-based permissions matching Supabase RLS:
+   * Determines whether the user has permissions to transition a document's status,
+   * evaluating the union of all assigned roles against Supabase RLS:
    *  - 'ADMIN': Can transition 'DRAFT', 'REVIEWED', 'APPROVED'.
-   *  - 'EDITOR': Can only transition 'DRAFT'.
+   *  - 'EDITOR': Can transition 'DRAFT'.
    *  - 'REVIEWER': Can transition 'DRAFT' or 'REVIEWED'.
    *  - 'APPROVER': Can transition 'REVIEWED' or 'APPROVED'.
    *  - 'VIEWER': Cannot transition any document.
    *  - 'OBSOLETE' documents cannot transition in any role.
-   *
-   * @param doc - The document to evaluate.
-   * @param role - Optional role to evaluate against (defaults to current user's role).
-   * @returns `true` if the status change action is allowed for the user's role, `false` otherwise.
    */
-  canChangeStatus(doc: Document, role: string = this.currentUserRole ?? ''): boolean {
-    const activeRole = role || (this.currentUserRole ?? '');
-    if (!activeRole || activeRole === 'VIEWER' || doc.status === 'OBSOLETE') {
+  canChangeStatus(doc: Document, role?: string | readonly string[]): boolean {
+    const roles = this.resolveRoles(role);
+    if (roles.length === 0 || doc.status === 'OBSOLETE') {
       return false;
     }
-
-    switch (activeRole) {
-      case 'ADMIN':
-        return true;
-      case 'EDITOR':
-        return doc.status === 'DRAFT';
-      case 'REVIEWER':
-        return doc.status === 'DRAFT' || doc.status === 'REVIEWED';
-      case 'APPROVER':
-        return doc.status === 'REVIEWED' || doc.status === 'APPROVED';
-      default:
-        return false;
+    if (roles.includes('ADMIN')) {
+      return true;
     }
+    if (doc.status === 'DRAFT') {
+      return roles.includes('EDITOR') || roles.includes('REVIEWER');
+    }
+    if (doc.status === 'REVIEWED') {
+      return roles.includes('REVIEWER') || roles.includes('APPROVER');
+    }
+    if (doc.status === 'APPROVED') {
+      return roles.includes('APPROVER');
+    }
+    return false;
   }
 
   // Google Drive backup status & retry helpers
 
   /**
-   * Determines whether the given role can trigger a manual Google Drive sync retry
+   * Determines whether the active role(s) can trigger a manual Google Drive sync retry
    * on approved documents (matching Supabase RLS `documents_update_policy`).
-   *
-   * @param role - Optional role to evaluate (defaults to current user's role).
-   * @returns `true` for 'ADMIN' and 'APPROVER', `false` otherwise.
    */
-  canRetryDriveSync(role: string = this.currentUserRole ?? ''): boolean {
-    const activeRole = role || (this.currentUserRole ?? '');
-    return activeRole === 'ADMIN' || activeRole === 'APPROVER';
+  canRetryDriveSync(role?: string | readonly string[]): boolean {
+    return this.hasAnyActiveRole(['ADMIN', 'APPROVER'], role);
   }
 
   /**

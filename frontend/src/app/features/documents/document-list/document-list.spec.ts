@@ -54,8 +54,14 @@ describe('DocumentListComponent', () => {
   ];
 
   const mockAuthService = {
+    getUserRoles: vi.fn().mockResolvedValue(['ADMIN']),
     getUserRole: vi.fn().mockResolvedValue('ADMIN'),
+    userRoles: signal<string[]>(['ADMIN']),
     userRole: signal<string | null>('ADMIN'),
+    hasRole: vi.fn((role: string) => mockAuthService.userRoles().includes(role.toUpperCase())),
+    hasAnyRole: vi.fn((roles: readonly string[]) =>
+      roles.some((r) => mockAuthService.userRoles().includes(r.toUpperCase())),
+    ),
   };
 
   const mockDocumentService = {
@@ -610,6 +616,24 @@ describe('DocumentListComponent', () => {
       expect(statusBtn).toBeNull();
       expect(deleteBtn).toBeNull();
       expect(editBtn).toBeNull();
+    });
+
+    it('should evaluate combined permissions for multi-role users (e.g. REVIEWER + APPROVER)', () => {
+      component.currentUserRoles = ['VIEWER', 'REVIEWER', 'APPROVER'];
+      expect(component.isAdmin).toBe(false);
+      expect(component.canViewActions()).toBe(true);
+      expect(component.canViewAuditHistory()).toBe(true);
+      expect(component.canRetryDriveSync()).toBe(true);
+      expect(component.canChangeStatus(draftDoc)).toBe(true);
+      expect(component.canChangeStatus(reviewedDoc)).toBe(true);
+      expect(component.canChangeStatus(approvedDoc)).toBe(true);
+      expect(component.canChangeStatus(obsoleteDoc)).toBe(false);
+      expect(component.canDelete(draftDoc)).toBe(true);
+      expect(component.canDelete(approvedDoc)).toBe(false);
+
+      component.currentUserRoles = ['VIEWER', 'ADMIN'];
+      expect(component.isAdmin).toBe(true);
+      expect(component.canChangeStatus(draftDoc)).toBe(true);
     });
   });
 

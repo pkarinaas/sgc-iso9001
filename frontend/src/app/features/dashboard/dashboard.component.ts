@@ -29,7 +29,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { DocumentService } from '../../core/services/document.service';
 import { DashboardService } from '../../core/services/dashboard.service';
 import type { Document } from '../../core/models/document.model';
-import { extractRoleName, type User } from '../../core/models/user.model';
+import { extractRoleNames, type User } from '../../core/models/user.model';
 import type { DashboardMetrics, PendingDocumentDetail } from '../../core/models/dashboard.model';
 
 /**
@@ -118,11 +118,17 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   get isAdmin(): boolean {
     const user = this.currentUser();
-    const role =
-      extractRoleName(user?.roles) ??
-      (typeof this.authService.userRole === 'function' ? this.authService.userRole() : null);
+    if (user) {
+      return extractRoleNames(user).includes('ADMIN');
+    }
 
-    return role?.toUpperCase() === 'ADMIN';
+    if (typeof this.authService.hasRole === 'function') {
+      return this.authService.hasRole('ADMIN');
+    }
+
+    const legacyRole =
+      typeof this.authService.userRole === 'function' ? this.authService.userRole() : null;
+    return legacyRole?.toUpperCase() === 'ADMIN';
   }
 
   // PDF viewer modal state

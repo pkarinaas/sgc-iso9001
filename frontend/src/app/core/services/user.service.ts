@@ -2,7 +2,13 @@ import { Injectable, signal } from '@angular/core';
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase/supabase.client';
 import { environment } from '../../../environments/environment';
-import type { Role, User, CreateUserPayload, UpdateUserPayload } from '../models/user.model';
+import {
+  extractRoleNames,
+  type Role,
+  type User,
+  type CreateUserPayload,
+  type UpdateUserPayload,
+} from '../models/user.model';
 
 /**
  * UserService manages the reactive state for the Users & Roles feature.
@@ -12,6 +18,13 @@ import type { Role, User, CreateUserPayload, UpdateUserPayload } from '../models
  */
 @Injectable({ providedIn: 'root' })
 export class UserService {
+  /**
+   * Explicit PostgREST select disambiguating the direct `users_role_id_fkey`
+   * relationship from the N:M `user_roles` relationship to prevent `PGRST201`.
+   */
+  private static readonly USER_WITH_ROLES_SELECT =
+    'id, email, full_name, role_id, is_active, created_at, assigned_processes, roles:roles!users_role_id_fkey(id, name, description), user_roles(role_id, roles(id, name))';
+
   // State signals (writable internally, read-only externally)
 
   private readonly _users = signal<User[]>([]);
@@ -35,7 +48,8 @@ export class UserService {
 
   /**
    * Fetches all users from `public.users` ordered alphabetically by full name.
-   * The nested `roles(id, name, description)` join populates `User.roles`.
+   * Uses explicit foreign-key disambiguation (`users_role_id_fkey`) and `user_roles`
+   * to avoid PostgREST `PGRST201` ambiguity while normalizing `roles` and `roleNames`.
    */
   async loadUsers(): Promise<void> {
     this._loading.set(true);
@@ -43,15 +57,14 @@ export class UserService {
 
     const { data, error } = await supabase
       .from('users')
-      .select(
-        'id, email, full_name, role_id, is_active, created_at, assigned_processes, roles(id, name, description)',
-      )
+      .select(UserService.USER_WITH_ROLES_SELECT)
       .order('full_name', { ascending: true });
 
     if (error) {
       this._error.set(error.message);
     } else {
-      this._users.set((data as unknown as User[]) ?? []);
+      const rows = (data as unknown as User[]) ?? [];
+      this._users.set(rows.map((row) => this.normalizeUser(row)));
     }
 
     this._loading.set(false);
@@ -66,9 +79,7 @@ export class UserService {
   async getUserProfile(userId: string): Promise<User | null> {
     const { data, error } = await supabase
       .from('users')
-      .select(
-        'id, email, full_name, role_id, is_active, created_at, assigned_processes, roles(id, name, description)',
-      )
+      .select(UserService.USER_WITH_ROLES_SELECT)
       .eq('id', userId)
       .single();
 
@@ -76,7 +87,43 @@ export class UserService {
       return null;
     }
 
-    return data as unknown as User;
+    return this.normalizeUser(data as unknown as User);
+  }
+
+  private normalizeUser(raw: User): User {
+    const rawRoles = raw.roles as Role | Role[] | null | undefined;
+    let legacyRole: Role | null = Array.isArray(rawRoles)
+      ? (rawRoles[0] ?? null)
+      : (rawRoles ?? null);
+    const roleNames = extractRoleNames({
+      user_roles: raw.user_roles,
+      roles: legacyRole,
+      roleNames: raw.roleNames,
+    });
+
+    if (!legacyRole && roleNames.length > 0 && Array.isArray(raw.user_roles)) {
+      const primaryName = roleNames[0];
+      for (const relation of raw.user_roles) {
+        const relRoles = relation?.roles;
+        const candidates = Array.isArray(relRoles) ? relRoles : relRoles ? [relRoles] : [];
+        const match = candidates.find((r) => r.name?.trim().toUpperCase() === primaryName);
+        if (match) {
+          legacyRole = {
+            id: match.id,
+            name: match.name,
+            description: null,
+            created_at: '',
+          };
+          break;
+        }
+      }
+    }
+
+    return {
+      ...raw,
+      roles: legacyRole,
+      roleNames,
+    };
   }
 
   /**
